@@ -11,6 +11,8 @@ requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "Martin B. Nielsen"}]
 dependencies = [
+    "AsteroScale @ git+https://github.com/nielsenmb/AsteroScale.git@c348e95dad2769e534176050ddf7b644495b2d59",
+    "jax>=0.4.28,<0.7",
     "numpy>=1.24",
     "scipy>=1.10",
 ]
@@ -21,7 +23,9 @@ test = ["pytest>=7", "pytest-cov>=4"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/asterodetect"]
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
-

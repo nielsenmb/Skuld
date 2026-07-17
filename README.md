@@ -9,9 +9,47 @@ three complete descriptions of a power-density spectrum:
 3. noise plus granulation and a Gaussian oscillation envelope.
 
 The package currently contains the deterministic model, periodogram
-likelihoods, whole-spectrum mixture calculation, simulations, and unit tests.
-Sampler integration and the AsteroScale prior adapter will be added after the
-core likelihood has been validated.
+likelihoods, whole-spectrum mixture calculation, simulations, JAX numerical
+kernels, an AsteroScale sample adapter, and unit tests. Sampler integration
+will be added after the core likelihood has been validated.
+
+The validated public API remains NumPy based. Performance-sensitive kernels
+in `asterodetect.jax_backend` are pure, traceable functions that can be used
+with `jax.jit`, `jax.vmap`, and automatic differentiation when worthwhile.
+AsteroScale is installed from a pinned Git commit so that changes on its main
+branch cannot silently alter Skuld's inference behaviour.
+
+The detection spectrum is intended to be heavily and irreversibly binned
+before inference. `AsteroScaleSamples.bin_spectrum` chooses a fixed width of
+approximately one predicted large separation, subject to retaining at least
+five bins across the envelope FWHM. Spectral models are averaged over the
+stored bin boundaries rather than evaluated only at their centres. An
+overdispersion factor reduces the nominal Gamma shape when unresolved modes
+or the spectral window introduce more variance than independent smooth bins.
+
+AsteroScale's `A_env` is a radial-mode RMS amplitude, not envelope power.
+`ObservationModel` converts each joint AsteroScale sample to the Gaussian
+parameterization used by the detector:
+
+```text
+P_env = V_tot A_env^2 (FWHM_env / Dnu) sqrt(pi / (4 ln 2)) (D eta)^2
+```
+
+Here `V_tot` is the summed relative mode power per radial order (3.04 by
+default), `D` is the target-flux dilution, and `eta` is the finite-integration
+time amplitude response evaluated at `numax`. Both observational corrections
+are explicit and act quadratically on power. The visibility should eventually
+be inferred or sensitivity-tested rather than treated as exact.
+
+```python
+from asterodetect import AsteroScaleSamples, ObservationModel
+
+samples = AsteroScaleSamples.infer(stellar_measurements)
+observed = samples.envelope_parameters(
+    ObservationModel(integration_time_seconds=120.0, dilution=0.92)
+)
+# observed contains aligned integrated_power, numax, and sigma samples.
+```
 
 ## Probability model
 
@@ -86,4 +124,3 @@ mixture = WholeSpectrumMixture(
 evaluation = mixture.evaluate(spectrum)
 print(evaluation.responsibilities)
 ```
-

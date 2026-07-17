@@ -38,6 +38,35 @@ class HarveyComponent:
         )
         object.__setattr__(self, "exponent", _positive_finite(self.exponent, "exponent"))
 
+    @classmethod
+    def from_rms_amplitude(
+        cls,
+        amplitude: float,
+        characteristic_frequency: float,
+        exponent: float = 4.0,
+    ) -> "HarveyComponent":
+        """Construct a normalized Harvey profile from its integrated RMS.
+
+        The resulting one-sided profile integrates from zero to infinity to
+        ``amplitude**2``.  For an exponent of four this is the normalized
+        Kallinger super-Lorentzian used by AsteroScale.
+        """
+
+        amplitude = _positive_finite(amplitude, "amplitude")
+        characteristic_frequency = _positive_finite(
+            characteristic_frequency, "characteristic_frequency"
+        )
+        exponent = _positive_finite(exponent, "exponent")
+        if exponent <= 1:
+            raise ValueError("exponent must exceed one for finite integrated power")
+        normalization = exponent * np.sin(np.pi / exponent) / np.pi
+        power = (
+            normalization
+            * amplitude**2
+            / characteristic_frequency
+        )
+        return cls(power, characteristic_frequency, exponent)
+
     def __call__(self, frequency: ArrayLike) -> NDArray[np.float64]:
         frequency_array = np.asarray(frequency, dtype=float)
         if np.any(frequency_array < 0) or not np.all(np.isfinite(frequency_array)):
@@ -81,4 +110,3 @@ class GaussianEnvelope:
             raise ValueError("frequency must be finite and non-negative")
         offset = (frequency_array - self.numax) / self.sigma
         return self.height * np.exp(-0.5 * offset**2)
-

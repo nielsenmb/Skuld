@@ -38,10 +38,10 @@ def gamma_log_likelihood(
         or not np.all(np.isfinite(gamma_shape))
         or np.any(observed <= 0)
         or np.any(expected <= 0)
-        or np.any(gamma_shape < 1)
+        or np.any(gamma_shape <= 0)
     ):
         raise ValueError(
-            "power and mean_power must be positive; shape must be at least one"
+            "power, mean_power, and shape must be positive"
         )
 
     terms = (
@@ -57,8 +57,14 @@ def gamma_log_likelihood(
 def model_log_likelihood(spectrum: PowerSpectrum, model: SpectralModel) -> float:
     """Evaluate a complete spectral model against a power spectrum."""
 
-    expected = model.mean_spectrum(spectrum.frequency)
+    if np.any(spectrum.bins_averaged > 1):
+        expected = model.mean_binned_spectrum(
+            spectrum.bin_lower, spectrum.bin_upper
+        )
+    else:
+        expected = model.mean_spectrum(spectrum.frequency)
     return gamma_log_likelihood(
-        spectrum.power, expected, spectrum.bins_averaged
+        spectrum.power,
+        expected,
+        spectrum.bins_averaged / model.overdispersion,
     )
-

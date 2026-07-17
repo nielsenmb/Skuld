@@ -18,12 +18,14 @@ class SpectralModel:
     white_noise: float
     harvey_components: tuple[HarveyComponent, ...] = ()
     envelope: GaussianEnvelope | None = None
+    overdispersion: float = 1.0
 
     def __init__(
         self,
         white_noise: float,
         harvey_components: Iterable[HarveyComponent] = (),
         envelope: GaussianEnvelope | None = None,
+        overdispersion: float = 1.0,
     ) -> None:
         components = tuple(harvey_components)
         if not all(isinstance(component, HarveyComponent) for component in components):
@@ -35,6 +37,10 @@ class SpectralModel:
         )
         object.__setattr__(self, "harvey_components", components)
         object.__setattr__(self, "envelope", envelope)
+        overdispersion = _positive_finite(overdispersion, "overdispersion")
+        if overdispersion < 1:
+            raise ValueError("overdispersion must be at least one")
+        object.__setattr__(self, "overdispersion", overdispersion)
 
     def mean_spectrum(self, frequency: ArrayLike) -> NDArray[np.float64]:
         """Evaluate the positive limit spectrum."""
@@ -52,3 +58,48 @@ class SpectralModel:
             result += self.envelope(frequency_array)
         return result
 
+    def mean_binned_spectrum(
+        self,
+        lower: ArrayLike,
+        upper: ArrayLike,
+        *,
+        quadrature_order: int = 16,
+    ) -> NDArray[np.float64]:
+        """Average the limit spectrum over fixed frequency intervals."""
+
+        from scipy.special import erf
+
+        lower_array = np.asarray(lower, dtype=float)
+        upper_array = np.asarray(upper, dtype=float)
+        if lower_array.shape != upper_array.shape or lower_array.ndim != 1:
+            raise ValueError("lower and upper must be matching one-dimensional arrays")
+        if (
+            not np.all(np.isfinite(lower_array))
+            or not np.all(np.isfinite(upper_array))
+            or np.any(lower_array < 0)
+            or np.any(upper_array <= lower_array)
+        ):
+            raise ValueError("each bin must have finite bounds with 0 <= lower < upper")
+        if quadrature_order < 2:
+            raise ValueError("quadrature_order must be at least two")
+
+        widths = upper_array - lower_array
+        result = np.full(lower_array.shape, self.white_noise, dtype=float)
+        if self.harvey_components:
+            nodes, weights = np.polynomial.legendre.leggauss(quadrature_order)
+            samples = (
+                0.5 * widths[:, None] * nodes[None, :]
+                + 0.5 * (upper_array + lower_array)[:, None]
+            )
+            for component in self.harvey_components:
+                result += 0.5 * np.sum(
+                    component(samples) * weights[None, :], axis=1
+                )
+        if self.envelope is not None:
+            scale = np.sqrt(2.0) * self.envelope.sigma
+            probability = 0.5 * (
+                erf((upper_array - self.envelope.numax) / scale)
+                - erf((lower_array - self.envelope.numax) / scale)
+            )
+            result += self.envelope.integrated_power * probability / widths
+        return result

@@ -25,3 +25,12 @@ def test_regular_binning_updates_gamma_shape():
     np.testing.assert_allclose(binned.power, [1.5, 3.5, 5.5, 7.5])
     np.testing.assert_allclose(binned.bins_averaged, 2)
 
+
+def test_physical_width_binning_retains_edges_and_raw_bin_counts():
+    frequency = np.arange(0.5, 10.0, 1.0)
+    spectrum = PowerSpectrum(frequency, np.arange(1.0, 11.0))
+    binned = spectrum.bin_by_width(2.0)
+    np.testing.assert_allclose(binned.bin_lower, [0, 2, 4, 6, 8])
+    np.testing.assert_allclose(binned.bin_upper, [2, 4, 6, 8, 10])
+    np.testing.assert_allclose(binned.bins_averaged, 2)
+    np.testing.assert_allclose(binned.power, [1.5, 3.5, 5.5, 7.5, 9.5])
