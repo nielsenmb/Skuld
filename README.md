@@ -325,6 +325,38 @@ Tutorial notebooks are in `notebooks/`. Install their dependencies with
 `02_injection_recovery.ipynb`, then
 `03_evidence_and_binning_sensitivity.ipynb`.
 
+## Adaptive importance sampling
+
+`AdaptiveImportanceSampler` provides a defensive two-stage estimator for
+cases where direct prior averaging has a very small evidence ESS. A pilot
+sample fits a likelihood-weighted Gaussian proposal, which is mixed with the
+original prior:
+
+\[
+q(\theta)=\epsilon p(\theta)+(1-\epsilon)g(\theta).
+\]
+
+The evidence estimate uses the complete importance correction
+\(p(D\mid\theta)p(\theta)/q(\theta)\). The prior component preserves support
+if the pilot misses a mode, and the result reports the final ESS and
+log-evidence standard error.
+
+```python
+from asterodetect import AdaptiveImportanceSampler
+
+sampler = AdaptiveImportanceSampler(
+    pilot_draws=256,
+    draws=2048,
+    defensive_fraction=0.2,
+)
+result = sampler.run(prior_sample, prior_logpdf, log_likelihood, rng=42)
+print(result.log_evidence, result.diagnostic.effective_sample_size)
+```
+
+The callables use an `(n_draws, n_parameters)` unconstrained parameter
+matrix. This low-level interface lets the estimator be validated independently
+before it is made the end-to-end detector default.
+
 ## Development install
 
 ```bash
