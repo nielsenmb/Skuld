@@ -1,8 +1,10 @@
 import numpy as np
+import pytest
 
 from asterodetect import (
     AsteroScaleSamples, Detector, InjectionCase, NuisancePrior,
-    PowerSpectrum, Recovery, build_detection_study, build_injection_grid, evaluate_injections,
+    PowerSpectrum, Recovery, build_detection_study, build_injection_grid,
+    build_regime_detection_study, evaluate_injections,
     probability_reliability, summarize_recoveries, threshold_curve,
 )
 from asterodetect.detector import DetectionResult
@@ -181,3 +183,43 @@ def test_detection_study_does_not_duplicate_negative_classes_by_amplitude():
         for case in cases
         if case.truth == "oscillation"
     } == {0.1, 1.0}
+
+
+def test_regime_detection_study_labels_and_separates_regimes():
+    frequency = np.arange(0.5, 10.0, 0.5)
+
+    def factory(name, parameters, rng):
+        return InjectionCase(
+            name,
+            parameters["truth"],
+            PowerSpectrum(
+                frequency, rng.exponential(1.0, frequency.size)
+            ),
+            _samples(),
+            metadata=dict(parameters),
+        )
+
+    cases = build_regime_detection_study(
+        {"dwarf": factory, "giant": factory},
+        {
+            "dwarf": {"white_noise": [0.1]},
+            "giant": {"white_noise": [1.0, 2.0]},
+        },
+        oscillation_amplitudes=[0.3],
+        repeats=2,
+        seed=12,
+    )
+    assert len(cases) == (1 + 2) * 3 * 2
+    assert {case.metadata["stellar_regime"] for case in cases} == {
+        "dwarf",
+        "giant",
+    }
+    assert all(case.name.startswith(("dwarf-", "giant-")) for case in cases)
+
+
+def test_regime_detection_study_requires_matching_labels():
+    with pytest.raises(ValueError, match="identical regime labels"):
+        build_regime_detection_study(
+            {"dwarf": lambda *args: None},
+            {"giant": {"white_noise": [1.0]}},
+        )
