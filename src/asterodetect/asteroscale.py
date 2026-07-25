@@ -189,3 +189,27 @@ class AsteroScaleSamples:
         for values in parameters.values():
             values.setflags(write=False)
         return MappingProxyType(parameters)
+
+    def granulation_parameters(
+        self,
+        observation: "ObservationModel | None" = None,
+    ) -> Mapping[str, NDArray[np.float64]]:
+        """Return aligned two-component Kallinger background parameters."""
+
+        from .observation import ObservationModel
+
+        if observation is None:
+            observation = ObservationModel()
+        if not isinstance(observation, ObservationModel):
+            raise TypeError("observation must be an ObservationModel")
+        low, high = observation.granulation_amplitudes(self.values["A_gran"])
+        parameters = {
+            "amplitudes": np.column_stack((low, high)),
+            "frequencies": np.column_stack(
+                (self.values["b_gran_low"], self.values["b_gran_high"])
+            ),
+            "exponents": np.full((len(self), 2), 4.0),
+        }
+        for values in parameters.values():
+            values.setflags(write=False)
+        return MappingProxyType(parameters)

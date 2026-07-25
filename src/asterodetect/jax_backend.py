@@ -77,6 +77,18 @@ def harvey_from_rms(
     )
 
 
+def apodized_harvey_from_rms(
+    frequency, amplitude, characteristic_frequency, integration_time_seconds,
+    exponent=4.0,
+):
+    """Kallinger profile with frequency-dependent cadence attenuation."""
+
+    response = cadence_amplitude_response(frequency, integration_time_seconds)
+    return response**2 * harvey_from_rms(
+        frequency, amplitude, characteristic_frequency, exponent
+    )
+
+
 def gaussian_envelope(frequency, integrated_power, numax, sigma):
     """Evaluate a Gaussian envelope parameterized by integrated power."""
 

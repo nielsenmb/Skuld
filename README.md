@@ -8,10 +8,9 @@ three complete descriptions of a power-density spectrum:
 2. noise plus Harvey-like granulation;
 3. noise plus granulation and a Gaussian oscillation envelope.
 
-The package currently contains the deterministic model, periodogram
-likelihoods, whole-spectrum mixture calculation, simulations, JAX numerical
-kernels, an AsteroScale sample adapter, and unit tests. Sampler integration
-will be added after the core likelihood has been validated.
+The package contains the deterministic model, periodogram likelihoods,
+whole-spectrum and prior-predictive mixture calculations, simulations, JAX
+numerical kernels, an AsteroScale sample adapter, and unit tests.
 
 The validated public API remains NumPy based. Performance-sensitive kernels
 in `asterodetect.jax_backend` are pure, traceable functions that can be used
@@ -51,6 +50,17 @@ observed = samples.envelope_parameters(
 # observed contains aligned integrated_power, numax, and sigma samples.
 ```
 
+Kallinger et al. (2014) define `A_gran` as the combined bolometric RMS of two
+super-Lorentzian components. Skuld splits its *variance* between them:
+
+```text
+a_low^2 + a_high^2 = (A_gran / C_bol)^2
+```
+
+The default split is equal, but `granulation_variance_fraction_low` exposes
+the assumption. Cadence attenuation is applied frequency by frequency to the
+Harvey profiles, rather than once at their characteristic frequencies.
+
 ## Probability model
 
 For an unbinned periodogram, each power measurement is exponentially
@@ -70,6 +80,33 @@ p(D) = sum_k pi_k prod_j p(P_j | S_k(nu_j))
 It is intentionally not a product of per-bin mixtures.  Consequently, its
 responsibilities describe support for whole spectral models rather than the
 fraction of frequency bins assigned to a component.
+
+## Marginalizing the model parameters
+
+`PriorPredictiveMarginalizer` integrates the three complete models over
+aligned AsteroScale rows. White noise can be fixed or supplied as one prior
+draw per row:
+
+```python
+from asterodetect import ObservationModel, PriorPredictiveMarginalizer
+
+binned = samples.bin_spectrum(spectrum)
+result = PriorPredictiveMarginalizer().evaluate(
+    binned,
+    samples,
+    white_noise=white_noise_draws,
+    observation=ObservationModel(integration_time_seconds=120.0),
+)
+
+print(result.responsibilities)
+print(result.diagnostics["oscillation"].effective_sample_size)
+```
+
+For each model the evidence estimator is `logmeanexp` of the likelihoods.
+Diagnostics include the importance-weight effective sample size and a
+delta-method standard error for the log evidence. A model probability should
+not be treated as calibrated when its evidence is dominated by very few prior
+draws; more samples or a better proposal distribution are then required.
 
 ## Development install
 

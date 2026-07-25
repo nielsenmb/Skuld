@@ -6,6 +6,7 @@ from asterodetect import (
     ObservationModel,
     cadence_amplitude_response,
     envelope_integrated_power,
+    granulation_component_amplitudes,
 )
 
 
@@ -58,3 +59,17 @@ def test_envelope_conversion_broadcasts_joint_samples():
     )
     assert result.shape == (2,)
     assert result[1] == pytest.approx(4 * result[0])
+
+
+def test_combined_granulation_amplitude_splits_variance_not_amplitude():
+    low, high = granulation_component_amplitudes(10.0)
+    assert low == pytest.approx(10 / np.sqrt(2))
+    assert high == pytest.approx(10 / np.sqrt(2))
+    assert low**2 + high**2 == pytest.approx(100.0)
+
+
+def test_granulation_bandpass_and_dilution_act_on_amplitude():
+    low, high = granulation_component_amplitudes(
+        10.0, bolometric_correction=2.0, dilution=0.5
+    )
+    assert low**2 + high**2 == pytest.approx(6.25)

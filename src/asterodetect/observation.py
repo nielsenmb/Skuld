@@ -14,6 +14,43 @@ from numpy.typing import ArrayLike, NDArray
 DEFAULT_TOTAL_MODE_VISIBILITY = 3.04
 
 
+def granulation_component_amplitudes(
+    combined_bolometric_rms: ArrayLike,
+    *,
+    variance_fraction_low: ArrayLike = 0.5,
+    bolometric_correction: ArrayLike = 1.0,
+    dilution: ArrayLike = 1.0,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Split Kallinger's combined granulation RMS into two components.
+
+    ``combined_bolometric_rms`` obeys ``A_gran**2 = C_bol**2 *
+    (a_low**2 + a_high**2)``.  The fraction therefore divides *variance*,
+    not amplitude.  Returned amplitudes are in the observed bandpass, before
+    the frequency-dependent cadence response is applied.
+    """
+
+    amplitude = _positive_array(combined_bolometric_rms, "combined_bolometric_rms")
+    correction = _positive_array(bolometric_correction, "bolometric_correction")
+    dilution_array = _positive_array(dilution, "dilution")
+    fraction = np.asarray(variance_fraction_low, dtype=float)
+    if (
+        not np.all(np.isfinite(fraction))
+        or np.any(fraction <= 0)
+        or np.any(fraction >= 1)
+    ):
+        raise ValueError("variance_fraction_low must be finite and in (0, 1)")
+    if np.any(dilution_array > 1):
+        raise ValueError("dilution must not exceed one")
+    try:
+        amplitude, correction, dilution_array, fraction = np.broadcast_arrays(
+            amplitude, correction, dilution_array, fraction
+        )
+    except ValueError as error:
+        raise ValueError("granulation parameters must be broadcast-compatible") from error
+    observed = amplitude * dilution_array / correction
+    return observed * np.sqrt(fraction), observed * np.sqrt(1.0 - fraction)
+
+
 def _positive_array(value: ArrayLike, name: str) -> NDArray[np.float64]:
     array = np.asarray(value, dtype=float)
     if not np.all(np.isfinite(array)) or np.any(array <= 0):
@@ -121,6 +158,8 @@ class ObservationModel:
     integration_time_seconds: float | None = None
     dilution: float = 1.0
     total_mode_visibility: float = DEFAULT_TOTAL_MODE_VISIBILITY
+    bolometric_correction: float = 1.0
+    granulation_variance_fraction_low: float = 0.5
 
     def __post_init__(self) -> None:
         if self.integration_time_seconds is not None:
@@ -138,6 +177,14 @@ class ObservationModel:
         if not np.isfinite(visibility) or visibility <= 0:
             raise ValueError("total_mode_visibility must be finite and positive")
         object.__setattr__(self, "total_mode_visibility", visibility)
+        correction = float(self.bolometric_correction)
+        if not np.isfinite(correction) or correction <= 0:
+            raise ValueError("bolometric_correction must be finite and positive")
+        object.__setattr__(self, "bolometric_correction", correction)
+        fraction = float(self.granulation_variance_fraction_low)
+        if not np.isfinite(fraction) or not 0 < fraction < 1:
+            raise ValueError("granulation_variance_fraction_low must be in (0, 1)")
+        object.__setattr__(self, "granulation_variance_fraction_low", fraction)
 
     def envelope_power(
         self,
@@ -157,4 +204,16 @@ class ObservationModel:
             integration_time_seconds=self.integration_time_seconds,
             dilution=self.dilution,
             total_mode_visibility=self.total_mode_visibility,
+        )
+
+    def granulation_amplitudes(
+        self, combined_bolometric_rms: ArrayLike
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Return the low/high Kallinger component RMS amplitudes."""
+
+        return granulation_component_amplitudes(
+            combined_bolometric_rms,
+            variance_fraction_low=self.granulation_variance_fraction_low,
+            bolometric_correction=self.bolometric_correction,
+            dilution=self.dilution,
         )

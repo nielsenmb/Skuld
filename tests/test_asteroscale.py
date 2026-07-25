@@ -62,3 +62,14 @@ def test_envelope_parameters_preserve_rows_and_apply_observation_model():
         intrinsic["integrated_power"][1] / 4
     )
     assert not diluted["integrated_power"].flags.writeable
+
+
+def test_granulation_parameters_preserve_rows_and_combined_variance():
+    values = {name: np.full(4, 10.0) for name in ASTERO_SCALE_PARAMETERS}
+    values["b_gran_low"] = np.arange(1.0, 5.0)
+    values["b_gran_high"] = np.arange(11.0, 15.0)
+    samples = AsteroScaleSamples(values)
+    parameters = samples.granulation_parameters()
+    np.testing.assert_array_equal(parameters["frequencies"][:, 0], values["b_gran_low"])
+    np.testing.assert_allclose(np.sum(parameters["amplitudes"] ** 2, axis=1), 100.0)
+    assert not parameters["amplitudes"].flags.writeable
