@@ -81,6 +81,23 @@ It is intentionally not a product of per-bin mixtures.  Consequently, its
 responsibilities describe support for whole spectral models rather than the
 fraction of frequency bins assigned to a component.
 
+The three classes should be interpreted observationally. The granulation-only
+model does **not** claim that a solar-like star has no oscillations. It is the
+null hypothesis that the observed PSD does not require a visible oscillation
+envelope after granulation has been accounted for. The binary detection
+probability is therefore
+
+```text
+P(detection | D) = P(oscillation | D)
+P(no detection | D) = P(noise | D) + P(granulation | D)
+```
+
+Dropping the granulation-only model changes the question. A granulation
+spectrum would then be compared with pure noise and with a model that contains
+both granulation and oscillations. The latter can win simply because it is the
+only remaining model with granulation, producing an apparent oscillation
+detection even when no oscillation envelope was injected.
+
 ## Marginalizing the model parameters
 
 `PriorPredictiveMarginalizer` integrates the three complete models over
@@ -418,6 +435,48 @@ The detector deliberately continues to use its independent-Gamma likelihood
 for these spectra. The experiment therefore measures robustness to unmodelled
 leakage and inter-bin correlations; the likelihood has not silently been
 taught the same window used for injection.
+
+### Comparing model sets
+
+Completed evidences can be recombined under alternative model priors without
+rerunning the detector:
+
+```python
+two_model = result.evaluation.reweight(
+    {"noise": 0.5, "oscillation": 0.5}
+)
+```
+
+This is intended as a paired diagnostic, not as evidence that an omitted
+model is physically absent. For a whole calibration experiment,
+`reweight_calibration_models` applies the same operation to every recovery.
+The runnable `examples/model_set_study.py` compares the original three-model
+calculation with noise-versus-oscillation and
+granulation-versus-oscillation alternatives on identical evidence estimates.
+
+In the 480-spectrum standard window campaign, removing the granulation model
+gave an apparent 100% true-positive rate but a 50% false-positive rate: all
+granulation-only validation spectra were called detections. No tested
+threshold satisfied the 5% false-positive constraint. The three-model
+calculation is therefore retained.
+
+## Tutorials
+
+The notebooks follow the detector in implementation order:
+
+1. `01_models_and_binning.ipynb` — resolved modes and fixed
+   \(\Delta\nu\)-scale binning;
+2. `02_injection_recovery.ipynb` — generating spectra and running recovery;
+3. `03_evidence_and_binning_sensitivity.ipynb` — Monte Carlo convergence;
+4. `04_from_spectrum_to_probability.ipynb` — comparing a measured spectrum
+   with the three complete models and converting evidences into probabilities;
+5. `05_true_positive_rate.ipynb` — tuning/validation splits, thresholds,
+   true-positive rates, observing windows, and the model-removal diagnostic.
+
+Install the plotting dependencies with `uv sync --extra tutorial`. The last
+notebook reads the saved standard-campaign summary in `notebooks/data` so it
+can reproduce the reported plots without rerunning the full adaptive
+inference campaign.
 
 Run the leakage-safe paired checkpoint with:
 

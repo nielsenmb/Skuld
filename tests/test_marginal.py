@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from asterodetect import (
     AsteroScaleSamples,
@@ -71,3 +72,33 @@ def test_white_noise_draws_are_marginalized_and_report_low_ess_when_needed():
     assert 1 <= diagnostic.effective_sample_size < len(samples)
     assert diagnostic.log_evidence_standard_error > 0
     assert np.isclose(sum(result.responsibilities.values()), 1.0)
+
+
+def test_marginal_evaluation_can_reweight_a_model_subset():
+    evaluation = PriorPredictiveMarginalizer().from_evidences(
+        {"noise": 0.0, "granulation": 1.0, "oscillation": 2.0},
+        {},
+    )
+    reweighted = evaluation.reweight({"noise": 0.5, "oscillation": 0.5})
+    expected = 1.0 / (1.0 + np.exp(-2.0))
+    assert reweighted.responsibilities["oscillation"] == pytest.approx(expected)
+    assert reweighted.responsibilities["granulation"] == 0.0
+    assert reweighted.log_evidences is evaluation.log_evidences
+
+
+@pytest.mark.parametrize(
+    "probabilities",
+    [
+        {"oscillation": 1.0},
+        {"noise": 0.6, "oscillation": 0.6},
+        {"noise": -0.1, "oscillation": 1.1},
+        {"noise": 0.5, "unknown": 0.5},
+    ],
+)
+def test_marginal_reweight_validates_model_probabilities(probabilities):
+    evaluation = PriorPredictiveMarginalizer().from_evidences(
+        {"noise": 0.0, "granulation": 1.0, "oscillation": 2.0},
+        {},
+    )
+    with pytest.raises(ValueError):
+        evaluation.reweight(probabilities)

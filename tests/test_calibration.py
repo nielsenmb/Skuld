@@ -5,8 +5,8 @@ from asterodetect import (
     AsteroScaleSamples, Detector, InjectionCase, NuisancePrior,
     PowerSpectrum, Recovery, build_detection_study, build_injection_grid,
     build_regime_detection_study, evaluate_injections,
-    probability_reliability, select_detection_threshold, split_calibration,
-    split_injections,
+    probability_reliability, reweight_calibration_models,
+    select_detection_threshold, split_calibration, split_injections,
     summarize_recoveries, threshold_curve,
 )
 from asterodetect.detector import DetectionResult
@@ -138,6 +138,35 @@ def test_binary_detection_metrics_distinguish_completeness_and_false_positives()
     assert metrics.false_positive_rate == 0.5
     assert metrics.precision == 0.5
     assert len(metrics.reliability) == 2
+
+
+def test_calibration_model_reweighting_preserves_cases_and_evidences():
+    calibration = summarize_recoveries(
+        [
+            _recovery("o1", "oscillation", 0.9),
+            _recovery("g1", "granulation", 0.1),
+        ]
+    )
+    reweighted = reweight_calibration_models(
+        calibration,
+        {"noise": 0.5, "oscillation": 0.5},
+    )
+    assert [item.case for item in reweighted.recoveries] == [
+        item.case for item in calibration.recoveries
+    ]
+    assert all(
+        item.result.probabilities["granulation"] == 0
+        for item in reweighted.recoveries
+    )
+    assert all(
+        item.result.evaluation.log_evidences
+        is original.result.evaluation.log_evidences
+        for item, original in zip(
+            reweighted.recoveries,
+            calibration.recoveries,
+            strict=True,
+        )
+    )
 
 
 def test_probability_reliability_includes_probability_one_in_last_bin():
