@@ -49,6 +49,19 @@ class SensitivitySummary:
 
 
 @dataclass(frozen=True, slots=True)
+class EstimatorComparison:
+    """Adaptive-estimator changes relative to prior sampling."""
+
+    draws: int
+    dnu_scale: float
+    evaluations_per_estimator: int
+    mean_absolute_oscillation_probability_difference: float
+    classification_accuracy_difference: float
+    minimum_median_ess_fraction_ratio: float
+    maximum_median_log_evidence_standard_error_ratio: float
+
+
+@dataclass(frozen=True, slots=True)
 class SensitivityStudy:
     """Results of a paired detector sensitivity experiment."""
 
@@ -118,8 +131,79 @@ class SensitivityStudy:
             )
         return tuple(summaries)
 
+    def estimator_comparisons(self) -> tuple[EstimatorComparison, ...]:
+        """Compare adaptive and prior estimators for matched configurations."""
+
+        grouped: dict[tuple[int, float, str], SensitivitySummary] = {
+            (summary.draws, summary.dnu_scale, summary.estimator): summary
+            for summary in self.summaries()
+        }
+        comparisons = []
+        configurations = sorted(
+            {(run.draws, run.dnu_scale) for run in self.runs}
+        )
+        for draws, dnu_scale in configurations:
+            prior = grouped.get((draws, dnu_scale, "prior"))
+            adaptive = grouped.get((draws, dnu_scale, "adaptive"))
+            if prior is None or adaptive is None:
+                continue
+
+            prior_runs = {
+                (run.case_name, run.repeat): run
+                for run in self.runs
+                if run.draws == draws
+                and run.dnu_scale == dnu_scale
+                and run.estimator == "prior"
+            }
+            adaptive_runs = {
+                (run.case_name, run.repeat): run
+                for run in self.runs
+                if run.draws == draws
+                and run.dnu_scale == dnu_scale
+                and run.estimator == "adaptive"
+            }
+            matched = sorted(prior_runs.keys() & adaptive_runs.keys())
+            probability_difference = np.mean(
+                [
+                    abs(
+                        adaptive_runs[key].probabilities["oscillation"]
+                        - prior_runs[key].probabilities["oscillation"]
+                    )
+                    for key in matched
+                ]
+            )
+            comparisons.append(
+                EstimatorComparison(
+                    draws=draws,
+                    dnu_scale=dnu_scale,
+                    evaluations_per_estimator=len(matched),
+                    mean_absolute_oscillation_probability_difference=float(
+                        probability_difference
+                    ),
+                    classification_accuracy_difference=(
+                        adaptive.classification_accuracy
+                        - prior.classification_accuracy
+                    ),
+                    minimum_median_ess_fraction_ratio=_safe_ratio(
+                        adaptive.minimum_median_ess_fraction,
+                        prior.minimum_median_ess_fraction,
+                    ),
+                    maximum_median_log_evidence_standard_error_ratio=_safe_ratio(
+                        adaptive.maximum_median_log_evidence_standard_error,
+                        prior.maximum_median_log_evidence_standard_error,
+                    ),
+                )
+            )
+        return tuple(comparisons)
+
 
 DetectorLabels = ("noise", "granulation", "oscillation")
+
+
+def _safe_ratio(numerator: float, denominator: float) -> float:
+    if denominator == 0:
+        return float("inf") if numerator > 0 else 1.0
+    return float(numerator / denominator)
 
 
 def run_sensitivity_study(

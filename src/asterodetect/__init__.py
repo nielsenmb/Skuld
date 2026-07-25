@@ -44,6 +44,7 @@ from .simulation import (
     simulate_periodogram,
 )
 from .sensitivity import (
+    EstimatorComparison,
     SensitivityRun,
     SensitivityStudy,
     SensitivitySummary,
@@ -63,6 +64,7 @@ __all__ = [
     "AdaptiveNuisanceMarginalizer",
     "DetectionResult",
     "Detector",
+    "EstimatorComparison",
     "JointPrior",
     "NuisancePrior",
     "MixtureEvaluation",

@@ -268,11 +268,14 @@ study = run_sensitivity_study(
     cases,
     draw_counts=[128, 512, 2048],
     dnu_scales=[0.5, 1.0, 2.0],
+    estimators=["prior", "adaptive"],
     repeats=4,
     seed=123,
 )
 for summary in study.summaries():
     print(summary)
+for comparison in study.estimator_comparisons():
+    print(comparison)
 ```
 
 The injected spectra are paired: exactly the same periodogram realization is
@@ -282,6 +285,13 @@ reports probability scatter, classification accuracy, the lowest median ESS
 fraction among the three models, and the largest median log-evidence standard
 error. A high model probability is not considered converged merely because it
 is close to zero or one.
+
+When both estimators are requested, `estimator_comparisons()` reports the
+adaptive-to-prior ESS and evidence-error ratios for every draw-count/bin-width
+combination. It also reports the mean absolute change in oscillation
+probability and the change in classification accuracy. This makes it possible
+to check that improved ESS corresponds to stable scientific conclusions,
+rather than treating sampling efficiency alone as sufficient.
 
 The runnable `examples/sensitivity_study.py` writes the same diagnostics to
 JSON. `notebooks/03_evidence_and_binning_sensitivity.ipynb` illustrates how to
@@ -383,7 +393,14 @@ study = run_sensitivity_study(
     repeats=4,
     seed=42,
 )
+for comparison in study.estimator_comparisons():
+    print(comparison)
 ```
+
+Adaptive sampling should not be made the default solely because an individual
+case has a larger ESS. The paired study should show consistently higher ESS,
+lower log-evidence error, and stable probabilities across inference seeds and
+binning choices.
 
 ## Development install
 

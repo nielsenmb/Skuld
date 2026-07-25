@@ -98,3 +98,21 @@ def test_sensitivity_study_compares_estimators_on_the_same_case():
         "prior",
         "adaptive",
     }
+    comparison = study.estimator_comparisons()
+    assert len(comparison) == 1
+    assert comparison[0].evaluations_per_estimator == 1
+    assert comparison[0].mean_absolute_oscillation_probability_difference >= 0
+    assert comparison[0].minimum_median_ess_fraction_ratio >= 0
+    assert comparison[0].maximum_median_log_evidence_standard_error_ratio >= 0
+
+
+def test_estimator_comparisons_require_both_estimators():
+    study = run_sensitivity_study(
+        [_case()],
+        draw_counts=[8],
+        dnu_scales=[1.0],
+        estimators=["prior"],
+        repeats=1,
+        seed=3,
+    )
+    assert study.estimator_comparisons() == ()

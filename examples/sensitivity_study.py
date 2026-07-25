@@ -53,6 +53,7 @@ def run_study(repeats: int, seed: int) -> dict[str, object]:
         repeats=repeats,
         seed=seed + 1,
         observation=ObservationModel(integration_time_seconds=120.0),
+        estimators=["prior", "adaptive"],
     )
     return {
         "cases": len(cases),
@@ -61,6 +62,7 @@ def run_study(repeats: int, seed: int) -> dict[str, object]:
             {
                 "draws": item.draws,
                 "dnu_scale": item.dnu_scale,
+                "estimator": item.estimator,
                 "evaluations": item.evaluations,
                 "mean_oscillation_probability": item.mean_oscillation_probability,
                 "oscillation_probability_std": item.oscillation_probability_std,
@@ -71,6 +73,26 @@ def run_study(repeats: int, seed: int) -> dict[str, object]:
                 ),
             }
             for item in study.summaries()
+        ],
+        "estimator_comparisons": [
+            {
+                "draws": item.draws,
+                "dnu_scale": item.dnu_scale,
+                "evaluations_per_estimator": item.evaluations_per_estimator,
+                "mean_absolute_oscillation_probability_difference": (
+                    item.mean_absolute_oscillation_probability_difference
+                ),
+                "classification_accuracy_difference": (
+                    item.classification_accuracy_difference
+                ),
+                "minimum_median_ess_fraction_ratio": (
+                    item.minimum_median_ess_fraction_ratio
+                ),
+                "maximum_median_log_evidence_standard_error_ratio": (
+                    item.maximum_median_log_evidence_standard_error_ratio
+                ),
+            }
+            for item in study.estimator_comparisons()
         ],
     }
 
