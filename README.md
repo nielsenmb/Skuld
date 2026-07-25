@@ -339,17 +339,24 @@ Tutorial notebooks are in `notebooks/`. Install their dependencies with
 
 `AdaptiveImportanceSampler` provides a defensive two-stage estimator for
 cases where direct prior averaging has a very small evidence ESS. A pilot
-sample fits a likelihood-weighted Gaussian proposal, which is mixed with the
-original prior:
+sample fits a likelihood-weighted multivariate Student proposal, which is
+mixed with the original prior:
 
 \[
-q(\theta)=\epsilon p(\theta)+(1-\epsilon)g(\theta).
+q(\theta)=\epsilon p(\theta)+(1-\epsilon)t_\nu(\theta).
 \]
+
+When the ordinary pilot weights collapse onto too few points, the likelihood
+is tempered only for fitting the proposal until a requested pilot ESS is
+retained. The final evidence weights always use the full, untempered
+likelihood, so this stabilization does not change the target evidence. The
+Student proposal also has heavier tails than the previous Gaussian fit.
 
 The evidence estimate uses the complete importance correction
 \(p(D\mid\theta)p(\theta)/q(\theta)\). The prior component preserves support
 if the pilot misses a mode, and the result reports the final ESS and
-log-evidence standard error.
+log-evidence standard error, together with the pilot ESS and adaptation
+temperature.
 
 ```python
 from asterodetect import AdaptiveImportanceSampler
@@ -358,9 +365,11 @@ sampler = AdaptiveImportanceSampler(
     pilot_draws=256,
     draws=2048,
     defensive_fraction=0.2,
+    pilot_ess_fraction=0.1,
+    proposal_degrees_of_freedom=5,
 )
 result = sampler.run(prior_sample, prior_logpdf, log_likelihood, rng=42)
-print(result.log_evidence, result.diagnostic.effective_sample_size)
+print(result.log_evidence, result.diagnostic)
 ```
 
 The callables use an `(n_draws, n_parameters)` unconstrained parameter
@@ -380,6 +389,10 @@ AsteroScale remains the stellar prior: complete sample rows are resampled
 without fitting a Gaussian to them, preserving correlations between
 `numax`, `dnu`, amplitudes, and timescales. The adaptive proposal targets
 only standardized nuisance coordinates, separately for each spectral model.
+Each nuisance point averages the likelihood over several intact AsteroScale
+rows (`stellar_draws_per_nuisance=8` by default). This reduces noise in the
+proposal fit without factorizing or Gaussianizing the empirical stellar
+sample cloud.
 The original estimator remains the default while calibration is ongoing.
 
 Paired comparisons can reuse each injected PSD across both estimators:
@@ -400,7 +413,10 @@ for comparison in study.estimator_comparisons():
 Adaptive sampling should not be made the default solely because an individual
 case has a larger ESS. The paired study should show consistently higher ESS,
 lower log-evidence error, and stable probabilities across inference seeds and
-binning choices.
+binning choices. `minimum_truth_model_median_ess_fraction` reports convergence
+for each injection's known generating model; the original worst-model metric
+is retained because even strongly disfavoured evidences can still be
+diagnostically useful.
 
 ## Development install
 

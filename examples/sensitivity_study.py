@@ -19,6 +19,21 @@ from asterodetect.asteroscale import ASTERO_SCALE_PARAMETERS
 
 
 def solar_like_samples(draws: int = 1024, seed: int = 123):
+    """Construct correlated solar-like AsteroScale samples.
+
+    Parameters
+    ----------
+    draws
+        Number of aligned sample rows.
+    seed
+        Random seed.
+
+    Returns
+    -------
+    AsteroScaleSamples
+        Synthetic correlated sample cloud.
+    """
+
     rng = np.random.default_rng(seed)
     latent = rng.normal(size=draws)
     values = {name: np.ones(draws) for name in ASTERO_SCALE_PARAMETERS}
@@ -35,6 +50,21 @@ def solar_like_samples(draws: int = 1024, seed: int = 123):
 
 
 def run_study(repeats: int, seed: int) -> dict[str, object]:
+    """Run the paired evidence-estimator study.
+
+    Parameters
+    ----------
+    repeats
+        Independent inference repeats per configuration.
+    seed
+        Root random seed.
+
+    Returns
+    -------
+    dict
+        JSON-serializable study summary.
+    """
+
     samples = solar_like_samples(seed=seed)
     factory = AstrophysicalInjectionFactory(
         samples, duration_days=27.4, cadence_seconds=120.0
@@ -71,6 +101,9 @@ def run_study(repeats: int, seed: int) -> dict[str, object]:
                 "maximum_median_log_evidence_standard_error": (
                     item.maximum_median_log_evidence_standard_error
                 ),
+                "minimum_truth_model_median_ess_fraction": (
+                    item.minimum_truth_model_median_ess_fraction
+                ),
             }
             for item in study.summaries()
         ],
@@ -91,6 +124,9 @@ def run_study(repeats: int, seed: int) -> dict[str, object]:
                 "maximum_median_log_evidence_standard_error_ratio": (
                     item.maximum_median_log_evidence_standard_error_ratio
                 ),
+                "minimum_truth_model_median_ess_fraction_ratio": (
+                    item.minimum_truth_model_median_ess_fraction_ratio
+                ),
             }
             for item in study.estimator_comparisons()
         ],
@@ -98,6 +134,8 @@ def run_study(repeats: int, seed: int) -> dict[str, object]:
 
 
 def main() -> None:
+    """Run the command-line sensitivity-study example."""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--seed", type=int, default=123)

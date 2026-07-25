@@ -21,7 +21,17 @@ from .observation import (
 
 @dataclass(frozen=True, slots=True)
 class MonteCarloDiagnostic:
-    """Convergence information for one prior-predictive integral."""
+    """Convergence information for one prior-predictive integral.
+
+    Attributes
+    ----------
+    draws
+        Number of Monte Carlo likelihood evaluations.
+    effective_sample_size
+        Effective number of likelihood-weighted draws.
+    log_evidence_standard_error
+        Delta-method uncertainty of the log evidence.
+    """
 
     draws: int
     effective_sample_size: float
@@ -30,7 +40,17 @@ class MonteCarloDiagnostic:
 
 @dataclass(frozen=True, slots=True)
 class MarginalEvaluation:
-    """Marginal likelihoods and posterior complete-model probabilities."""
+    """Marginal likelihoods and posterior complete-model probabilities.
+
+    Attributes
+    ----------
+    log_evidences
+        Natural-log marginal likelihood keyed by model.
+    responsibilities
+        Posterior model probabilities.
+    diagnostics
+        Model-specific Monte Carlo diagnostics.
+    """
 
     log_evidences: Mapping[str, float]
     responsibilities: Mapping[str, float]
@@ -38,6 +58,8 @@ class MarginalEvaluation:
 
 
 def _log_evidence(log_likelihoods: NDArray[np.float64]) -> tuple[float, MonteCarloDiagnostic]:
+    """Estimate log evidence and Monte Carlo diagnostics from prior draws."""
+
     n = log_likelihoods.size
     log_z = float(logsumexp(log_likelihoods) - np.log(n))
     weights = np.exp(log_likelihoods - np.max(log_likelihoods))
@@ -48,6 +70,8 @@ def _log_evidence(log_likelihoods: NDArray[np.float64]) -> tuple[float, MonteCar
 
 
 def _gamma_log_likelihood_batch(power, expected, shape):
+    """Evaluate Gamma log likelihoods for a batch of expected spectra."""
+
     shape = np.asarray(shape, dtype=float)
     if shape.ndim == 1:
         shape = shape[None, :]
@@ -68,7 +92,24 @@ def _granulation_means(
     frequencies: NDArray[np.float64],
     integration_time_seconds: float | None,
 ) -> NDArray[np.float64]:
-    """Bin-average two normalized super-Lorentzians for every prior row."""
+    """Bin-average two normalized super-Lorentzians for every prior row.
+
+    Parameters
+    ----------
+    spectrum
+        Fixed-bin observed spectrum.
+    amplitudes
+        Component RMS amplitudes with shape ``(draw, component)``.
+    frequencies
+        Characteristic frequencies aligned with ``amplitudes``.
+    integration_time_seconds
+        Optional exposure time for cadence apodization.
+
+    Returns
+    -------
+    numpy.ndarray
+        Granulation mean with shape ``(draw, bin)``.
+    """
 
     nodes, weights = np.polynomial.legendre.leggauss(12)
     lower, upper = spectrum.bin_lower, spectrum.bin_upper
@@ -91,6 +132,8 @@ def _granulation_means(
 
 
 def _envelope_means(spectrum: PowerSpectrum, parameters) -> NDArray[np.float64]:
+    """Average Gaussian envelopes over the observed frequency bins."""
+
     lower = spectrum.bin_lower[None, :]
     upper = spectrum.bin_upper[None, :]
     widths = upper - lower
@@ -109,6 +152,13 @@ class PriorPredictiveMarginalizer:
     ``white_noise`` may be one positive value or one value per AsteroScale
     row.  The same rows are used for G and O, preserving all AsteroScale
     correlations.  The PSD must already have its fixed binning.
+
+    Parameters
+    ----------
+    model_probabilities
+        Prior probabilities for the three complete models.
+    overdispersion
+        Default factor reducing the nominal Gamma shape.
     """
 
     labels = ("noise", "granulation", "oscillation")
@@ -119,6 +169,8 @@ class PriorPredictiveMarginalizer:
         model_probabilities: Mapping[str, float] | None = None,
         overdispersion: float = 1.0,
     ) -> None:
+        """Validate and store model priors and default overdispersion."""
+
         probabilities = model_probabilities or {label: 1 / 3 for label in self.labels}
         if set(probabilities) != set(self.labels):
             raise ValueError(f"model_probabilities must have labels {self.labels}")
@@ -140,7 +192,28 @@ class PriorPredictiveMarginalizer:
         granulation_variance_fraction_low: ArrayLike | None = None,
         overdispersion: ArrayLike | None = None,
     ) -> MarginalEvaluation:
-        """Return marginal model probabilities and Monte Carlo diagnostics."""
+        """Return marginal model probabilities and Monte Carlo diagnostics.
+
+        Parameters
+        ----------
+        spectrum
+            Fixed-bin observed power spectrum.
+        samples
+            Aligned AsteroScale sample rows.
+        white_noise
+            Scalar or sample-aligned white-noise levels.
+        observation
+            Observation response model.
+        granulation_variance_fraction_low
+            Optional low-frequency Harvey variance fraction per sample.
+        overdispersion
+            Optional scalar or sample-aligned overdispersion.
+
+        Returns
+        -------
+        MarginalEvaluation
+            Evidences, posterior model probabilities, and diagnostics.
+        """
 
         if not isinstance(spectrum, PowerSpectrum):
             raise TypeError("spectrum must be a PowerSpectrum")
@@ -170,7 +243,28 @@ class PriorPredictiveMarginalizer:
         granulation_variance_fraction_low: ArrayLike | None = None,
         overdispersion: ArrayLike | None = None,
     ) -> Mapping[str, NDArray[np.float64]]:
-        """Evaluate every complete model for aligned stellar and nuisance rows."""
+        """Evaluate every complete model for aligned stellar and nuisance rows.
+
+        Parameters
+        ----------
+        spectrum
+            Fixed-bin observed power spectrum.
+        samples
+            Aligned AsteroScale sample rows.
+        white_noise
+            Scalar or sample-aligned white-noise levels.
+        observation
+            Observation response model.
+        granulation_variance_fraction_low
+            Optional low-frequency Harvey variance fraction per sample.
+        overdispersion
+            Optional scalar or sample-aligned overdispersion.
+
+        Returns
+        -------
+        mapping
+            Sample log likelihoods keyed by complete-model label.
+        """
 
         if not isinstance(spectrum, PowerSpectrum):
             raise TypeError("spectrum must be a PowerSpectrum")
@@ -237,7 +331,20 @@ class PriorPredictiveMarginalizer:
         evidences: Mapping[str, float],
         diagnostics: Mapping[str, MonteCarloDiagnostic],
     ) -> MarginalEvaluation:
-        """Combine model evidences with the configured model probabilities."""
+        """Combine model evidences with configured model probabilities.
+
+        Parameters
+        ----------
+        evidences
+            Natural-log evidences keyed by model label.
+        diagnostics
+            Monte Carlo diagnostics keyed by model label.
+
+        Returns
+        -------
+        MarginalEvaluation
+            Normalized posterior model probabilities and supplied inputs.
+        """
 
         joint = np.asarray(
             [evidences[label] + np.log(self.probabilities[label]) for label in self.labels]

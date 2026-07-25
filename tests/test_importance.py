@@ -41,3 +41,30 @@ def test_defensive_component_handles_unhelpful_pilot():
     )
     assert np.isclose(result.log_evidence, 0.0)
     assert np.isclose(result.diagnostic.effective_sample_size, 256)
+
+
+def test_narrow_pilot_is_tempered_to_requested_effective_sample_size():
+    def sample(size, rng):
+        return rng.normal(size=(size, 2))
+
+    sampler = AdaptiveImportanceSampler(
+        pilot_draws=200,
+        draws=512,
+        pilot_ess_fraction=0.2,
+    )
+    result = sampler.run(
+        sample,
+        lambda x: np.sum(norm.logpdf(x), axis=1),
+        lambda x: norm.logpdf(x[:, 0], loc=2.5, scale=0.05),
+        rng=7,
+    )
+    assert result.diagnostic.adaptation_temperature < 1
+    assert result.diagnostic.pilot_effective_sample_size >= 40 - 1e-8
+    assert np.isfinite(result.log_evidence)
+
+
+def test_adaptive_importance_validates_proposal_controls():
+    with np.testing.assert_raises(ValueError):
+        AdaptiveImportanceSampler(pilot_ess_fraction=0)
+    with np.testing.assert_raises(ValueError):
+        AdaptiveImportanceSampler(proposal_degrees_of_freedom=2)

@@ -20,6 +20,20 @@ def gamma_log_likelihood(
     The distribution is parameterized to have expectation ``mean_power`` and
     variance ``mean_power**2 / shape``.  ``shape=1`` recovers the exponential
     likelihood of an unbinned periodogram.
+
+    Parameters
+    ----------
+    power
+        Observed positive powers.
+    mean_power
+        Expected positive powers.
+    shape
+        Gamma shape parameters.
+
+    Returns
+    -------
+    float
+        Sum of independent-bin log likelihoods.
     """
 
     observed = np.asarray(power, dtype=float)
@@ -55,7 +69,20 @@ def gamma_log_likelihood(
 
 
 def model_log_likelihood(spectrum: PowerSpectrum, model: SpectralModel) -> float:
-    """Evaluate a complete spectral model against a power spectrum."""
+    """Evaluate a complete spectral model against a power spectrum.
+
+    Parameters
+    ----------
+    spectrum
+        Observed power spectrum.
+    model
+        Complete expected spectral model.
+
+    Returns
+    -------
+    float
+        Whole-spectrum log likelihood.
+    """
 
     if np.any(spectrum.bins_averaged > 1):
         expected = model.mean_binned_spectrum(

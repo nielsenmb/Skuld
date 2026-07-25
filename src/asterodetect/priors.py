@@ -10,15 +10,36 @@ import numpy as np
 
 @runtime_checkable
 class JointPrior(Protocol):
-    """Protocol to be implemented by the future AsteroScale adapter."""
+    """Protocol for normalized target-specific joint priors."""
 
     @property
     def ndim(self) -> int:
-        """Dimensionality of the joint prior."""
+        """Return the dimensionality of the joint prior."""
 
     def transform(self, unit_cube: ArrayLike) -> NDArray[np.float64]:
-        """Map a point from the unit cube into physical parameters."""
+        """Map a point from the unit cube into physical parameters.
+
+        Parameters
+        ----------
+        unit_cube
+            Coordinates on the unit hypercube.
+
+        Returns
+        -------
+        numpy.ndarray
+            Corresponding physical parameters.
+        """
 
     def logpdf(self, parameters: ArrayLike) -> float:
-        """Evaluate the normalized joint log-density."""
+        """Evaluate the normalized joint log density.
 
+        Parameters
+        ----------
+        parameters
+            Physical parameter vector.
+
+        Returns
+        -------
+        float
+            Normalized log density.
+        """

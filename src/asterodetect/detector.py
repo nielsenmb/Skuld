@@ -19,7 +19,23 @@ from .observation import ObservationModel
 
 @dataclass(frozen=True, slots=True)
 class DetectionResult:
-    """Complete result of one end-to-end detection run."""
+    """Complete result of one end-to-end detection run.
+
+    Attributes
+    ----------
+    evaluation
+        Marginal evidences, model probabilities, and convergence diagnostics.
+    binned_spectrum
+        Fixed-bin spectrum used for likelihood evaluation.
+    bin_width
+        Physical bin width in microhertz.
+    samples
+        AsteroScale sample rows used for the oscillation model.
+    nuisance_draws
+        Nuisance values aligned with ``samples``.
+    estimator
+        Evidence estimator name.
+    """
 
     evaluation: MarginalEvaluation
     binned_spectrum: PowerSpectrum
@@ -30,15 +46,60 @@ class DetectionResult:
 
     @property
     def probabilities(self) -> Mapping[str, float]:
+        """Return posterior probabilities keyed by model label.
+
+        Returns
+        -------
+        mapping
+            Read-only noise, granulation, and oscillation probabilities.
+        """
+
         return self.evaluation.responsibilities
 
     @property
     def classification(self) -> str:
+        """Return the maximum-posterior model label.
+
+        Returns
+        -------
+        str
+            One of ``"noise"``, ``"granulation"``, or ``"oscillation"``.
+        """
+
         return max(self.probabilities, key=self.probabilities.__getitem__)
 
 
 class Detector:
-    """Run AsteroScale conditioning, fixed binning, and model marginalization."""
+    """Run AsteroScale conditioning, fixed binning, and model marginalization.
+
+    Parameters
+    ----------
+    draws
+        Number of final Monte Carlo samples.
+    observation
+        Cadence, dilution, visibility, and bolometric response model.
+    nuisance_prior
+        Target-specific nuisance prior.
+    model_probabilities
+        Prior probabilities for the three spectral models.
+    dnu_scale
+        Bin width as a multiple of the predicted large separation.
+    minimum_envelope_bins
+        Minimum number of bins retained across the predicted envelope FWHM.
+    estimator
+        ``"prior"`` for plain prior averaging or ``"adaptive"`` for
+        defensive importance sampling.
+    pilot_draws
+        Number of prior draws used to fit each adaptive proposal.
+    defensive_fraction
+        Fraction of adaptive samples drawn directly from the prior.
+    pilot_ess_fraction
+        Minimum pilot ESS fraction enforced through likelihood tempering.
+    proposal_degrees_of_freedom
+        Degrees of freedom of the adaptive Student proposal.
+    stellar_draws_per_nuisance
+        Intact AsteroScale rows averaged at each adaptive nuisance point.
+    """
 
     def __init__(
         self,
@@ -52,7 +113,12 @@ class Detector:
         estimator: str = "prior",
         pilot_draws: int = 256,
         defensive_fraction: float = 0.2,
+        pilot_ess_fraction: float = 0.1,
+        proposal_degrees_of_freedom: float = 5.0,
+        stellar_draws_per_nuisance: int = 8,
     ) -> None:
+        """Initialize an end-to-end detector."""
+
         if isinstance(draws, bool) or not isinstance(draws, (int, np.integer)):
             raise TypeError("draws must be an integer")
         if draws < 1:
@@ -68,6 +134,9 @@ class Detector:
         self.estimator = estimator
         self.pilot_draws = pilot_draws
         self.defensive_fraction = defensive_fraction
+        self.pilot_ess_fraction = pilot_ess_fraction
+        self.proposal_degrees_of_freedom = proposal_degrees_of_freedom
+        self.stellar_draws_per_nuisance = stellar_draws_per_nuisance
 
     def run(
         self,
@@ -79,7 +148,28 @@ class Detector:
         solver: Any | None = None,
         **asteroscale_kwargs: Any,
     ) -> DetectionResult:
-        """Return marginalized probabilities for one unbinned PSD."""
+        """Return marginalized probabilities for one unbinned PSD.
+
+        Parameters
+        ----------
+        spectrum
+            Unbinned observed power spectrum.
+        stellar_constraints
+            Existing AsteroScale samples or measurements passed to AsteroScale.
+        rng
+            Random generator or seed.
+        white_noise_centre
+            Optional positive centre for the white-noise prior.
+        solver
+            Optional preconfigured AsteroScale solver.
+        **asteroscale_kwargs
+            Additional keywords passed to :meth:`AsteroScaleSamples.infer`.
+
+        Returns
+        -------
+        DetectionResult
+            Model probabilities, diagnostics, binning, and inference draws.
+        """
 
         if not isinstance(spectrum, PowerSpectrum):
             raise TypeError("spectrum must be a PowerSpectrum")
@@ -109,6 +199,9 @@ class Detector:
                 draws=self.draws,
                 pilot_draws=self.pilot_draws,
                 defensive_fraction=self.defensive_fraction,
+                pilot_ess_fraction=self.pilot_ess_fraction,
+                proposal_degrees_of_freedom=self.proposal_degrees_of_freedom,
+                stellar_draws_per_nuisance=self.stellar_draws_per_nuisance,
                 model_probabilities=self.model_probabilities,
             ).evaluate(
                 binned,

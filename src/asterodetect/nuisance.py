@@ -20,6 +20,21 @@ class NuisancePrior:
     Scatter parameters are standard deviations in natural-log space.  The
     white-noise prior is centred on a robust estimate from the highest
     frequency fraction of the supplied spectrum.
+
+    Parameters
+    ----------
+    white_noise_log_scatter
+        Natural-log scatter of the white-noise level.
+    envelope_log_scatter
+        Natural-log scatter of the oscillation amplitude multiplier.
+    granulation_log_scatter
+        Natural-log scatter of the granulation amplitude multiplier.
+    granulation_split_concentration
+        Symmetric Beta concentration for the Harvey variance split.
+    overdispersion_log_scatter
+        Natural-log scatter controlling overdispersion.
+    high_frequency_fraction
+        Fraction of high-frequency PSD bins used to estimate white noise.
     """
 
     white_noise_log_scatter: float = 0.35
@@ -38,6 +53,8 @@ class NuisancePrior:
     )
 
     def __post_init__(self) -> None:
+        """Validate nuisance-prior hyperparameters."""
+
         for name in (
             "white_noise_log_scatter",
             "envelope_log_scatter",
@@ -60,7 +77,18 @@ class NuisancePrior:
         object.__setattr__(self, "high_frequency_fraction", fraction)
 
     def estimate_white_noise(self, spectrum: PowerSpectrum) -> float:
-        """Estimate the white floor from the upper end of a PSD."""
+        """Estimate the white floor from the upper end of a PSD.
+
+        Parameters
+        ----------
+        spectrum
+            Observed power spectrum.
+
+        Returns
+        -------
+        float
+            Median power in the configured high-frequency fraction.
+        """
 
         count = max(1, int(np.ceil(len(spectrum.power) * self.high_frequency_fraction)))
         return float(np.median(spectrum.power[-count:]))
@@ -73,7 +101,24 @@ class NuisancePrior:
         rng: np.random.Generator | int | None = None,
         white_noise_centre: float | None = None,
     ) -> Mapping[str, NDArray[np.float64]]:
-        """Draw nuisance quantities used by one prior-predictive integral."""
+        """Draw nuisance quantities used by one prior-predictive integral.
+
+        Parameters
+        ----------
+        spectrum
+            Observed power spectrum used for the default noise centre.
+        size
+            Number of aligned nuisance rows.
+        rng
+            Random generator or seed.
+        white_noise_centre
+            Optional positive noise-prior centre.
+
+        Returns
+        -------
+        mapping
+            Immutable transformed nuisance arrays.
+        """
 
         if isinstance(size, bool) or not isinstance(size, (int, np.integer)):
             raise TypeError("size must be an integer")
@@ -102,7 +147,20 @@ class NuisancePrior:
         *,
         white_noise_centre: float,
     ) -> Mapping[str, NDArray[np.float64]]:
-        """Transform independent standard-Normal coordinates to nuisance values."""
+        """Transform standard-Normal coordinates to nuisance values.
+
+        Parameters
+        ----------
+        latent
+            Array with one column per name in ``latent_names``.
+        white_noise_centre
+            Positive centre of the white-noise prior.
+
+        Returns
+        -------
+        mapping
+            Transformed nuisance arrays aligned with input rows.
+        """
 
         values = np.asarray(latent, dtype=float)
         if (
@@ -118,6 +176,8 @@ class NuisancePrior:
             raise ValueError("white_noise_centre must be finite and positive")
 
         def lognormal(z: NDArray[np.float64], scatter: float) -> NDArray[np.float64]:
+            """Return a mean-one lognormal multiplier."""
+
             # Mean-one multiplier, so widening the prior does not move its mean.
             return np.exp(-0.5 * scatter**2 + scatter * z)
 

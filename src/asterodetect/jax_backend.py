@@ -23,7 +23,20 @@ _GAUSS_LEGENDRE_WEIGHTS = jnp.asarray(
 
 
 def cadence_amplitude_response(frequency, integration_time_seconds):
-    """JAX kernel for finite-integration-time amplitude attenuation."""
+    """Evaluate finite-integration-time amplitude attenuation.
+
+    Parameters
+    ----------
+    frequency
+        Frequencies in microhertz.
+    integration_time_seconds
+        Exposure integration time in seconds.
+
+    Returns
+    -------
+    jax.Array
+        Sinc amplitude response.
+    """
 
     return jnp.sinc(frequency * integration_time_seconds * 1.0e-6)
 
@@ -37,7 +50,24 @@ def envelope_integrated_power(
     dilution=1.0,
     total_mode_visibility=3.04,
 ):
-    """JAX kernel mapping radial-mode RMS amplitude to observed power."""
+    """Map radial-mode RMS amplitude to observed envelope power.
+
+    Parameters
+    ----------
+    radial_mode_rms_amplitude, dnu, fwhm, numax
+        Intrinsic envelope parameters.
+    integration_time_seconds
+        Exposure integration time.
+    dilution
+        Target fraction of aperture flux.
+    total_mode_visibility
+        Effective summed relative mode power.
+
+    Returns
+    -------
+    jax.Array
+        Observed integrated envelope power.
+    """
 
     response = cadence_amplitude_response(numax, integration_time_seconds)
     gaussian_area_in_fwhm = jnp.sqrt(jnp.pi) / (2.0 * jnp.sqrt(jnp.log(2.0)))
@@ -56,7 +86,24 @@ def harvey_profile(
     characteristic_frequency,
     exponent=4.0,
 ):
-    """Evaluate a Harvey profile parameterized by zero-frequency power."""
+    """Evaluate a Harvey profile parameterized by zero-frequency power.
+
+    Parameters
+    ----------
+    frequency
+        Evaluation frequencies.
+    power
+        Zero-frequency power density.
+    characteristic_frequency
+        Turnover frequency.
+    exponent
+        Super-Lorentzian exponent.
+
+    Returns
+    -------
+    jax.Array
+        Harvey power density.
+    """
 
     ratio = frequency / characteristic_frequency
     return power / (1.0 + ratio**exponent)
@@ -68,7 +115,18 @@ def harvey_from_rms(
     characteristic_frequency,
     exponent=4.0,
 ):
-    """Evaluate a one-sided Harvey profile normalized to RMS amplitude."""
+    """Evaluate a one-sided Harvey profile normalized to RMS amplitude.
+
+    Parameters
+    ----------
+    frequency, amplitude, characteristic_frequency, exponent
+        Evaluation grid and Harvey parameters.
+
+    Returns
+    -------
+    jax.Array
+        Normalized Harvey power density.
+    """
 
     normalization = exponent * jnp.sin(jnp.pi / exponent) / jnp.pi
     power = normalization * amplitude**2 / characteristic_frequency
@@ -81,7 +139,22 @@ def apodized_harvey_from_rms(
     frequency, amplitude, characteristic_frequency, integration_time_seconds,
     exponent=4.0,
 ):
-    """Kallinger profile with frequency-dependent cadence attenuation."""
+    """Evaluate a cadence-apodized Kallinger profile.
+
+    Parameters
+    ----------
+    frequency, amplitude, characteristic_frequency
+        Evaluation grid and Harvey parameters.
+    integration_time_seconds
+        Exposure integration time.
+    exponent
+        Super-Lorentzian exponent.
+
+    Returns
+    -------
+    jax.Array
+        Apodized Harvey power density.
+    """
 
     response = cadence_amplitude_response(frequency, integration_time_seconds)
     return response**2 * harvey_from_rms(
@@ -90,7 +163,18 @@ def apodized_harvey_from_rms(
 
 
 def gaussian_envelope(frequency, integrated_power, numax, sigma):
-    """Evaluate a Gaussian envelope parameterized by integrated power."""
+    """Evaluate a Gaussian envelope parameterized by integrated power.
+
+    Parameters
+    ----------
+    frequency, integrated_power, numax, sigma
+        Evaluation grid and Gaussian parameters.
+
+    Returns
+    -------
+    jax.Array
+        Gaussian power density.
+    """
 
     height = integrated_power / (jnp.sqrt(2.0 * jnp.pi) * sigma)
     offset = (frequency - numax) / sigma
@@ -113,6 +197,20 @@ def mean_spectrum(
     arrays represent a model with no Harvey components.  Setting the
     integrated envelope power to zero removes the envelope without changing
     the traced function signature.
+
+    Parameters
+    ----------
+    frequency, white_noise
+        Frequency grid and white-noise level.
+    harvey_powers, harvey_frequencies, harvey_exponents
+        Equal-length Harvey component arrays.
+    envelope_integrated_power, envelope_numax, envelope_sigma
+        Gaussian-envelope parameters.
+
+    Returns
+    -------
+    jax.Array
+        Expected power density.
     """
 
     frequency = jnp.asarray(frequency)
@@ -146,7 +244,24 @@ def mean_binned_spectrum(
     envelope_numax=1.0,
     envelope_sigma=1.0,
 ):
-    """Average a spectral model over bins using fixed JAX operations."""
+    """Average a spectral model over fixed frequency bins.
+
+    Parameters
+    ----------
+    lower, upper
+        Frequency-bin edges.
+    white_noise
+        White-noise level.
+    harvey_powers, harvey_frequencies, harvey_exponents
+        Harvey component arrays.
+    envelope_integrated_power, envelope_numax, envelope_sigma
+        Gaussian-envelope parameters.
+
+    Returns
+    -------
+    jax.Array
+        Mean power density in each bin.
+    """
 
     lower = jnp.asarray(lower)
     upper = jnp.asarray(upper)
@@ -176,7 +291,18 @@ def mean_binned_spectrum(
 
 
 def gamma_log_likelihood(power, expected_power, shape=1.0):
-    """Independent-bin Gamma log-likelihood with a JAX-traceable body."""
+    """Evaluate the independent-bin Gamma log likelihood.
+
+    Parameters
+    ----------
+    power, expected_power, shape
+        Observed powers, expected powers, and Gamma shapes.
+
+    Returns
+    -------
+    jax.Array
+        Scalar whole-spectrum log likelihood.
+    """
 
     power = jnp.asarray(power)
     expected_power = jnp.asarray(expected_power)
@@ -196,6 +322,24 @@ def whole_spectrum_mixture(power, expected_spectra, shape, probabilities):
 
     ``expected_spectra`` has shape ``(n_models, n_frequency)``.  This is a
     mixture of complete-spectrum likelihoods, not a per-frequency mixture.
+
+    Parameters
+    ----------
+    power
+        Observed power spectrum.
+    expected_spectra
+        Complete expected spectra for each model.
+    shape
+        Gamma shape parameter per bin.
+    probabilities
+        Prior model probabilities.
+
+    Returns
+    -------
+    log_likelihood
+        Mixture log likelihood.
+    responsibilities
+        Posterior model probabilities.
     """
 
     expected_spectra = jnp.asarray(expected_spectra)

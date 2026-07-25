@@ -30,11 +30,19 @@ class AsteroScaleSamples:
     ``A_gran`` is granulation RMS amplitude in ppm.  In particular,
     ``A_env`` is deliberately not treated as integrated Gaussian-envelope
     power; that physical conversion belongs in the later observation model.
+
+    Parameters
+    ----------
+    values
+        Mapping containing every quantity in ``ASTERO_SCALE_PARAMETERS``.
+        Arrays must be finite, one-dimensional, and equally long.
     """
 
     values: Mapping[str, NDArray[np.float64]]
 
     def __init__(self, values: Mapping[str, Any]) -> None:
+        """Validate and store aligned AsteroScale sample rows."""
+
         missing = set(ASTERO_SCALE_PARAMETERS) - set(values)
         if missing:
             raise ValueError(
@@ -73,6 +81,24 @@ class AsteroScaleSamples:
         should condition a population model on measurements.  Pass
         ``'propagate'`` explicitly for calculator-style uncertainty
         propagation.
+
+        Parameters
+        ----------
+        given
+            Stellar or seismic measurements accepted by AsteroScale.
+        solver
+            Optional preconfigured AsteroScale solver.
+        bandpass
+            Observational bandpass used for amplitude predictions.
+        input_mode
+            AsteroScale conditioning mode.
+        **solve_kwargs
+            Additional arguments passed to ``solver.solve``.
+
+        Returns
+        -------
+        AsteroScaleSamples
+            Aligned joint samples required by Skuld.
         """
 
         if solver is None:
@@ -89,6 +115,14 @@ class AsteroScaleSamples:
         return cls(result)
 
     def __len__(self) -> int:
+        """Return the number of aligned sample rows.
+
+        Returns
+        -------
+        int
+            Number of joint AsteroScale samples.
+        """
+
         return next(iter(self.values.values())).size
 
     def draw(
@@ -97,7 +131,20 @@ class AsteroScaleSamples:
         *,
         rng: np.random.Generator | int | None = None,
     ) -> dict[str, NDArray[np.float64]]:
-        """Resample complete rows, preserving all joint correlations."""
+        """Resample complete rows, preserving all joint correlations.
+
+        Parameters
+        ----------
+        size
+            Number of rows to draw with replacement.
+        rng
+            Random generator or seed.
+
+        Returns
+        -------
+        dict
+            Arrays keyed by AsteroScale parameter name.
+        """
 
         if isinstance(size, bool) or not isinstance(size, (int, np.integer)):
             raise TypeError("size must be an integer")
@@ -121,6 +168,18 @@ class AsteroScaleSamples:
 
         The default averages approximately one radial order while retaining
         at least five bins across the predicted envelope FWHM.
+
+        Parameters
+        ----------
+        dnu_scale
+            Candidate bin width in units of the median large separation.
+        minimum_envelope_bins
+            Minimum number of bins across the median envelope FWHM.
+
+        Returns
+        -------
+        float
+            Suggested physical bin width in microhertz.
         """
 
         dnu_scale = float(dnu_scale)
@@ -144,7 +203,24 @@ class AsteroScaleSamples:
         minimum_envelope_bins: int = 5,
         origin: float | None = None,
     ) -> "PowerSpectrum":
-        """Bin a spectrum once using the AsteroScale prediction."""
+        """Bin a spectrum once using the AsteroScale prediction.
+
+        Parameters
+        ----------
+        spectrum
+            Unbinned power spectrum.
+        dnu_scale
+            Candidate bin width in units of the median large separation.
+        minimum_envelope_bins
+            Minimum number of bins across the envelope FWHM.
+        origin
+            Optional origin of the fixed physical-frequency bins.
+
+        Returns
+        -------
+        PowerSpectrum
+            Fixed-bin power spectrum.
+        """
 
         from .data import PowerSpectrum
 
@@ -166,6 +242,16 @@ class AsteroScaleSamples:
         envelope power includes the observation model's visibility, cadence,
         and dilution terms; ``sigma`` is in microhertz and power is in ppm
         squared.
+
+        Parameters
+        ----------
+        observation
+            Observation response model.
+
+        Returns
+        -------
+        mapping
+            Aligned ``integrated_power``, ``numax``, and ``sigma`` arrays.
         """
 
         from .observation import ObservationModel
@@ -194,7 +280,18 @@ class AsteroScaleSamples:
         self,
         observation: "ObservationModel | None" = None,
     ) -> Mapping[str, NDArray[np.float64]]:
-        """Return aligned two-component Kallinger background parameters."""
+        """Return aligned two-component Kallinger background parameters.
+
+        Parameters
+        ----------
+        observation
+            Observation response model.
+
+        Returns
+        -------
+        mapping
+            Component amplitudes, characteristic frequencies, and exponents.
+        """
 
         from .observation import ObservationModel
 

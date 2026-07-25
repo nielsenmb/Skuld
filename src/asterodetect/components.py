@@ -9,6 +9,8 @@ from numpy.typing import ArrayLike, NDArray
 
 
 def _positive_finite(value: float, name: str) -> float:
+    """Validate a positive finite scalar."""
+
     value = float(value)
     if not np.isfinite(value) or value <= 0:
         raise ValueError(f"{name} must be finite and positive")
@@ -21,6 +23,15 @@ class HarveyComponent:
 
     ``power`` is the zero-frequency power-density level.  This explicit
     parameterization avoids silently mixing PSD height and integrated RMS.
+
+    Parameters
+    ----------
+    power
+        Zero-frequency power-density level.
+    characteristic_frequency
+        Turnover frequency in the same units as evaluated frequencies.
+    exponent
+        Positive super-Lorentzian exponent.
     """
 
     power: float
@@ -28,6 +39,8 @@ class HarveyComponent:
     exponent: float = 4.0
 
     def __post_init__(self) -> None:
+        """Validate and normalize scalar parameters."""
+
         object.__setattr__(self, "power", _positive_finite(self.power, "power"))
         object.__setattr__(
             self,
@@ -50,6 +63,20 @@ class HarveyComponent:
         The resulting one-sided profile integrates from zero to infinity to
         ``amplitude**2``.  For an exponent of four this is the normalized
         Kallinger super-Lorentzian used by AsteroScale.
+
+        Parameters
+        ----------
+        amplitude
+            Integrated RMS amplitude.
+        characteristic_frequency
+            Turnover frequency.
+        exponent
+            Super-Lorentzian exponent greater than one.
+
+        Returns
+        -------
+        HarveyComponent
+            Normalized one-sided Harvey component.
         """
 
         amplitude = _positive_finite(amplitude, "amplitude")
@@ -68,6 +95,19 @@ class HarveyComponent:
         return cls(power, characteristic_frequency, exponent)
 
     def __call__(self, frequency: ArrayLike) -> NDArray[np.float64]:
+        """Evaluate the component power density.
+
+        Parameters
+        ----------
+        frequency
+            Non-negative frequencies.
+
+        Returns
+        -------
+        numpy.ndarray
+            Harvey power density at each frequency.
+        """
+
         frequency_array = np.asarray(frequency, dtype=float)
         if np.any(frequency_array < 0) or not np.all(np.isfinite(frequency_array)):
             raise ValueError("frequency must be finite and non-negative")
@@ -77,13 +117,25 @@ class HarveyComponent:
 
 @dataclass(frozen=True, slots=True)
 class GaussianEnvelope:
-    """A Gaussian power envelope parameterized by integrated power."""
+    """A Gaussian power envelope parameterized by integrated power.
+
+    Parameters
+    ----------
+    integrated_power
+        Total area beneath the Gaussian.
+    numax
+        Frequency of maximum oscillation power.
+    sigma
+        Gaussian standard deviation in frequency units.
+    """
 
     integrated_power: float
     numax: float
     sigma: float
 
     def __post_init__(self) -> None:
+        """Validate and normalize scalar parameters."""
+
         object.__setattr__(
             self,
             "integrated_power",
@@ -94,17 +146,30 @@ class GaussianEnvelope:
 
     @property
     def height(self) -> float:
-        """Peak power density implied by the integrated power."""
+        """Return peak power density implied by the integrated power."""
 
         return self.integrated_power / (np.sqrt(2.0 * np.pi) * self.sigma)
 
     @property
     def fwhm(self) -> float:
-        """Full width at half maximum."""
+        """Return the full width at half maximum."""
 
         return 2.0 * np.sqrt(2.0 * np.log(2.0)) * self.sigma
 
     def __call__(self, frequency: ArrayLike) -> NDArray[np.float64]:
+        """Evaluate the Gaussian power density.
+
+        Parameters
+        ----------
+        frequency
+            Non-negative frequencies.
+
+        Returns
+        -------
+        numpy.ndarray
+            Envelope power density at each frequency.
+        """
+
         frequency_array = np.asarray(frequency, dtype=float)
         if np.any(frequency_array < 0) or not np.all(np.isfinite(frequency_array)):
             raise ValueError("frequency must be finite and non-negative")

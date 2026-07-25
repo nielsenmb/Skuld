@@ -18,6 +18,8 @@ from .observation import ObservationModel, cadence_amplitude_response
 
 
 def _as_generator(rng: np.random.Generator | int | None) -> np.random.Generator:
+    """Normalize a generator, integer seed, or ``None`` to a generator."""
+
     if isinstance(rng, np.random.Generator):
         return rng
     return np.random.default_rng(rng)
@@ -30,7 +32,24 @@ def simulate_periodogram(
     bins_averaged: ArrayLike = 1.0,
     rng: np.random.Generator | int | None = None,
 ) -> NDArray[np.float64]:
-    """Draw independent Gamma-distributed periodogram powers."""
+    """Draw independent Gamma-distributed periodogram powers.
+
+    Parameters
+    ----------
+    frequency
+        Frequency grid.
+    model
+        Complete expected spectral model.
+    bins_averaged
+        Gamma shape or number of averaged raw bins.
+    rng
+        Random generator or seed.
+
+    Returns
+    -------
+    numpy.ndarray
+        Simulated positive periodogram powers.
+    """
 
     frequency_array = np.asarray(frequency, dtype=float)
     expected = model.mean_spectrum(frequency_array)
@@ -53,7 +72,20 @@ def regular_frequency_grid(
     duration_days: float,
     cadence_seconds: float,
 ) -> NDArray[np.float64]:
-    """Return positive Fourier frequencies in microhertz up to Nyquist."""
+    """Return positive Fourier frequencies in microhertz up to Nyquist.
+
+    Parameters
+    ----------
+    duration_days
+        Observation duration in days.
+    cadence_seconds
+        Regular sampling cadence in seconds.
+
+    Returns
+    -------
+    numpy.ndarray
+        Positive real-FFT frequency grid.
+    """
 
     duration_days = float(duration_days)
     cadence_seconds = float(cadence_seconds)
@@ -77,7 +109,26 @@ def lorentzian_mode_comb(
     linewidth: float,
     mode_visibilities: Mapping[int, float] = DEFAULT_MODE_VISIBILITIES,
 ) -> NDArray[np.float64]:
-    """Construct an approximate resolved stochastic-mode limit spectrum."""
+    """Construct an approximate resolved stochastic-mode limit spectrum.
+
+    Parameters
+    ----------
+    frequency
+        Non-negative frequency grid.
+    numax, dnu, fwhm_envelope
+        Global seismic and envelope parameters.
+    radial_mode_rms_amplitude
+        Maximum radial-mode RMS amplitude.
+    linewidth
+        Mode FWHM.
+    mode_visibilities
+        Relative integrated powers keyed by angular degree.
+
+    Returns
+    -------
+    numpy.ndarray
+        Expected Lorentzian mode-comb power density.
+    """
 
     frequency_array = np.asarray(frequency, dtype=float)
     scalars = {
@@ -144,7 +195,25 @@ def lorentzian_mode_comb(
 
 @dataclass(frozen=True, slots=True)
 class AstrophysicalInjectionFactory:
-    """Create regular-sampling injections from joint AsteroScale samples."""
+    """Create regular-sampling injections from joint AsteroScale samples.
+
+    Parameters
+    ----------
+    stellar_samples
+        Joint AsteroScale samples defining the injected star.
+    duration_days, cadence_seconds
+        Default observing configuration.
+    white_noise
+        Default white-noise power density.
+    amplitude_scale, granulation_scale
+        Multipliers relative to AsteroScale predictions.
+    dilution
+        Target fraction of aperture flux.
+    linewidth
+        Optional fixed mode linewidth.
+    bolometric_correction
+        Granulation bolometric correction.
+    """
 
     stellar_samples: AsteroScaleSamples
     duration_days: float = 27.4
@@ -157,6 +226,8 @@ class AstrophysicalInjectionFactory:
     bolometric_correction: float = 1.0
 
     def __post_init__(self) -> None:
+        """Validate the AsteroScale sample container."""
+
         if not isinstance(self.stellar_samples, AsteroScaleSamples):
             raise TypeError("stellar_samples must be AsteroScaleSamples")
 
@@ -166,6 +237,23 @@ class AstrophysicalInjectionFactory:
         parameters: Mapping[str, Any],
         rng: np.random.Generator,
     ) -> InjectionCase:
+        """Generate one stochastic astrophysical injection.
+
+        Parameters
+        ----------
+        name
+            Unique case identifier.
+        parameters
+            Overrides for truth, observing setup, and amplitude scales.
+        rng
+            Random generator for the periodogram realization.
+
+        Returns
+        -------
+        InjectionCase
+            Simulated spectrum with recovery constraints and metadata.
+        """
+
         truth = str(parameters.get("truth", "oscillation"))
         if truth not in {"noise", "granulation", "oscillation"}:
             raise ValueError("truth must be noise, granulation, or oscillation")
@@ -274,6 +362,8 @@ class AstrophysicalInjectionFactory:
 
 
 def _positive_parameter(value: Any, name: str) -> float:
+    """Validate and return a positive finite scalar parameter."""
+
     result = float(value)
     if not np.isfinite(result) or result <= 0:
         raise ValueError(f"{name} must be finite and positive")
@@ -281,6 +371,8 @@ def _positive_parameter(value: Any, name: str) -> float:
 
 
 def _nonnegative_parameter(value: Any, name: str) -> float:
+    """Validate and return a non-negative finite scalar parameter."""
+
     result = float(value)
     if not np.isfinite(result) or result < 0:
         raise ValueError(f"{name} must be finite and non-negative")
