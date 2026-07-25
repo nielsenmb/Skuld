@@ -40,6 +40,8 @@ class PowerSpectrum:
         bin_lower: ArrayLike | None = None,
         bin_upper: ArrayLike | None = None,
     ) -> None:
+        """Validate and store an immutable power spectrum."""
+
         frequency_array = np.asarray(frequency, dtype=float)
         power_array = np.asarray(power, dtype=float)
 
@@ -108,7 +110,18 @@ class PowerSpectrum:
         object.__setattr__(self, "bin_upper", upper_array)
 
     def select(self, minimum: float, maximum: float) -> "PowerSpectrum":
-        """Return a frequency interval, including both endpoints."""
+        """Return a frequency interval, including both endpoints.
+
+        Parameters
+        ----------
+        minimum, maximum
+            Inclusive frequency limits.
+
+        Returns
+        -------
+        PowerSpectrum
+            Selected subset retaining bin metadata.
+        """
 
         if not np.isfinite(minimum) or not np.isfinite(maximum) or minimum >= maximum:
             raise ValueError("minimum and maximum must be finite with minimum < maximum")
@@ -128,6 +141,16 @@ class PowerSpectrum:
 
         Any incomplete group at the high-frequency edge is discarded.  This
         method assumes the input bins are mutually independent.
+
+        Parameters
+        ----------
+        factor
+            Number of consecutive input estimates per output bin.
+
+        Returns
+        -------
+        PowerSpectrum
+            Regularly rebinned spectrum.
         """
 
         if isinstance(factor, bool) or not isinstance(factor, (int, np.integer)):
@@ -181,6 +204,11 @@ class PowerSpectrum:
         already averaged spectrum preserves its Gamma sufficient statistic.
         The bin edges are retained for averaging the spectral model over the
         same intervals.
+
+        Returns
+        -------
+        PowerSpectrum
+            Spectrum averaged into the requested physical bins.
         """
 
         width = float(width)

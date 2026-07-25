@@ -16,7 +16,17 @@ from .models import SpectralModel
 
 @dataclass(frozen=True, slots=True)
 class MixtureEvaluation:
-    """Likelihood and responsibilities at fixed model parameters."""
+    """Likelihood and responsibilities at fixed model parameters.
+
+    Attributes
+    ----------
+    log_likelihood
+        Log likelihood marginalized over the categorical model label.
+    component_log_likelihoods
+        Log likelihood for each complete spectral model.
+    responsibilities
+        Posterior probabilities for the fixed component models.
+    """
 
     log_likelihood: float
     component_log_likelihoods: Mapping[str, float]
@@ -28,6 +38,13 @@ class WholeSpectrumMixture:
 
     The supplied probabilities are prior class probabilities at this level;
     they are not fractions of PSD power and are not fitted amplitudes.
+
+    Parameters
+    ----------
+    models
+        Complete spectral models keyed by label.
+    probabilities
+        Prior class probabilities keyed by the same labels.
     """
 
     def __init__(
@@ -35,6 +52,8 @@ class WholeSpectrumMixture:
         models: Mapping[str, SpectralModel],
         probabilities: Mapping[str, float],
     ) -> None:
+        """Validate and store the mixture components."""
+
         if not models:
             raise ValueError("at least one spectral model is required")
         if set(models) != set(probabilities):
@@ -55,14 +74,29 @@ class WholeSpectrumMixture:
 
     @property
     def models(self) -> Mapping[str, SpectralModel]:
+        """Return the immutable model mapping."""
+
         return self._models
 
     @property
     def probabilities(self) -> Mapping[str, float]:
+        """Return the immutable prior-probability mapping."""
+
         return self._probabilities
 
     def evaluate(self, spectrum: PowerSpectrum) -> MixtureEvaluation:
-        """Evaluate the mixture and posterior responsibilities."""
+        """Evaluate the mixture and posterior responsibilities.
+
+        Parameters
+        ----------
+        spectrum
+            Observed power spectrum.
+
+        Returns
+        -------
+        MixtureEvaluation
+            Marginal likelihood and posterior class probabilities.
+        """
 
         labels = tuple(self._models)
         component_logs = np.asarray(
@@ -85,4 +119,3 @@ class WholeSpectrumMixture:
                 dict(zip(labels, map(float, responsibilities), strict=True))
             ),
         )
-

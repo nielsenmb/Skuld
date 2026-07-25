@@ -27,6 +27,22 @@ def granulation_component_amplitudes(
     (a_low**2 + a_high**2)``.  The fraction therefore divides *variance*,
     not amplitude.  Returned amplitudes are in the observed bandpass, before
     the frequency-dependent cadence response is applied.
+
+    Parameters
+    ----------
+    combined_bolometric_rms
+        Combined bolometric RMS amplitude of both components.
+    variance_fraction_low
+        Fraction of total variance assigned to the low-frequency component.
+    bolometric_correction
+        Factor converting observed to bolometric amplitude.
+    dilution
+        Target fraction of the aperture flux.
+
+    Returns
+    -------
+    low, high
+        Observed RMS amplitudes of the two components.
     """
 
     amplitude = _positive_array(combined_bolometric_rms, "combined_bolometric_rms")
@@ -52,6 +68,8 @@ def granulation_component_amplitudes(
 
 
 def _positive_array(value: ArrayLike, name: str) -> NDArray[np.float64]:
+    """Validate and return a positive finite array."""
+
     array = np.asarray(value, dtype=float)
     if not np.all(np.isfinite(array)) or np.any(array <= 0):
         raise ValueError(f"{name} must be finite and positive")
@@ -68,6 +86,18 @@ def cadence_amplitude_response(
     so this is ``sin(pi * nu * dt) / (pi * nu * dt)``.  When integration time
     equals sampling cadence, it is equivalent to Eq. B.10 of Nielsen et al.
     (2022).  Power is attenuated by the square of this response.
+
+    Parameters
+    ----------
+    frequency
+        Frequencies in microhertz.
+    integration_time_seconds
+        Exposure integration time in seconds.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sinusoidal amplitude response.
     """
 
     frequency_array = np.asarray(frequency, dtype=float)
@@ -101,6 +131,28 @@ def envelope_integrated_power(
     squared.  Following the original detector, cadence attenuation is
     evaluated at ``numax``; this approximation is explicit here so it can be
     replaced by a frequency-dependent response near the Nyquist frequency.
+
+    Parameters
+    ----------
+    radial_mode_rms_amplitude
+        Maximum radial-mode RMS amplitude.
+    dnu
+        Large frequency separation.
+    fwhm
+        Oscillation-envelope FWHM.
+    numax
+        Frequency of maximum power, required when cadence attenuation is on.
+    integration_time_seconds
+        Optional exposure integration time.
+    dilution
+        Target fraction of aperture flux.
+    total_mode_visibility
+        Effective summed relative mode power per radial order.
+
+    Returns
+    -------
+    numpy.ndarray
+        Observed Gaussian integrated power.
     """
 
     amplitude = _positive_array(
@@ -153,6 +205,19 @@ class ObservationModel:
     ``integration_time_seconds=None`` disables cadence attenuation, which is
     useful for an intrinsic or already-corrected spectrum.  ``dilution`` is
     the fraction of aperture flux supplied by the target star.
+
+    Parameters
+    ----------
+    integration_time_seconds
+        Optional exposure integration time.
+    dilution
+        Target fraction of aperture flux.
+    total_mode_visibility
+        Effective summed relative mode power per radial order.
+    bolometric_correction
+        Factor converting observed to bolometric granulation amplitude.
+    granulation_variance_fraction_low
+        Variance fraction assigned to the low-frequency Harvey component.
     """
 
     integration_time_seconds: float | None = None
@@ -162,6 +227,8 @@ class ObservationModel:
     granulation_variance_fraction_low: float = 0.5
 
     def __post_init__(self) -> None:
+        """Validate instrumental response parameters."""
+
         if self.integration_time_seconds is not None:
             integration_time = float(self.integration_time_seconds)
             if not np.isfinite(integration_time) or integration_time <= 0:
@@ -194,7 +261,24 @@ class ObservationModel:
         *,
         numax: ArrayLike | None = None,
     ) -> NDArray[np.float64]:
-        """Return observed Gaussian-envelope integrated power in ppm squared."""
+        """Return observed Gaussian-envelope integrated power.
+
+        Parameters
+        ----------
+        radial_mode_rms_amplitude
+            Maximum radial-mode RMS amplitude in ppm.
+        dnu
+            Large frequency separation.
+        fwhm
+            Envelope FWHM.
+        numax
+            Frequency of maximum power.
+
+        Returns
+        -------
+        numpy.ndarray
+            Observed envelope power in ppm squared.
+        """
 
         return envelope_integrated_power(
             radial_mode_rms_amplitude,
@@ -209,7 +293,18 @@ class ObservationModel:
     def granulation_amplitudes(
         self, combined_bolometric_rms: ArrayLike
     ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-        """Return the low/high Kallinger component RMS amplitudes."""
+        """Return the low/high Kallinger component RMS amplitudes.
+
+        Parameters
+        ----------
+        combined_bolometric_rms
+            Combined bolometric granulation RMS.
+
+        Returns
+        -------
+        low, high
+            Observed component RMS amplitudes.
+        """
 
         return granulation_component_amplitudes(
             combined_bolometric_rms,

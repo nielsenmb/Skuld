@@ -69,3 +69,11 @@ def test_adaptive_detector_is_reproducible_and_improves_noise_ess():
         > plain.evaluation.diagnostics["noise"].effective_sample_size
     )
     assert len(first.samples) == 256
+
+
+def test_adaptive_detector_validates_stellar_average_size():
+    with np.testing.assert_raises(ValueError):
+        Detector(
+            estimator="adaptive",
+            stellar_draws_per_nuisance=0,
+        ).run(_raw_spectrum(), _samples(), rng=1)

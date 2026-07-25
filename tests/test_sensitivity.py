@@ -61,6 +61,7 @@ def test_sensitivity_study_is_paired_and_summarizes_diagnostics():
         assert summary.oscillation_probability_std >= 0
         assert 0 <= summary.minimum_median_ess_fraction <= 1
         assert summary.maximum_median_log_evidence_standard_error >= 0
+        assert 0 <= summary.minimum_truth_model_median_ess_fraction <= 1
 
 
 @pytest.mark.parametrize(
@@ -104,6 +105,7 @@ def test_sensitivity_study_compares_estimators_on_the_same_case():
     assert comparison[0].mean_absolute_oscillation_probability_difference >= 0
     assert comparison[0].minimum_median_ess_fraction_ratio >= 0
     assert comparison[0].maximum_median_log_evidence_standard_error_ratio >= 0
+    assert comparison[0].minimum_truth_model_median_ess_fraction_ratio >= 0
 
 
 def test_estimator_comparisons_require_both_estimators():

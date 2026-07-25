@@ -24,7 +24,20 @@ from asterodetect.asteroscale import ASTERO_SCALE_PARAMETERS
 
 
 def solar_like_samples(draws: int = 512, seed: int = 123) -> AsteroScaleSamples:
-    """Return correlated-looking demonstration samples around a solar target."""
+    """Return correlated demonstration samples around a solar target.
+
+    Parameters
+    ----------
+    draws
+        Number of aligned sample rows.
+    seed
+        Random seed.
+
+    Returns
+    -------
+    AsteroScaleSamples
+        Synthetic correlated sample cloud.
+    """
 
     rng = np.random.default_rng(seed)
     latent = rng.normal(size=draws)
@@ -42,6 +55,23 @@ def solar_like_samples(draws: int = 512, seed: int = 123) -> AsteroScaleSamples:
 
 
 def run_study(repeats: int, draws: int, seed: int) -> dict[str, object]:
+    """Run the demonstration completeness study.
+
+    Parameters
+    ----------
+    repeats
+        Stochastic injections per grid coordinate.
+    draws
+        Prior samples per detector run.
+    seed
+        Root random seed.
+
+    Returns
+    -------
+    dict
+        JSON-serializable calibration summary.
+    """
+
     samples = solar_like_samples(max(draws, 128), seed)
     factory = AstrophysicalInjectionFactory(
         samples,
@@ -97,10 +127,14 @@ def run_study(repeats: int, draws: int, seed: int) -> dict[str, object]:
 
 
 def _finite_or_none(value: float) -> float | None:
+    """Convert a finite value to float and non-finite values to ``None``."""
+
     return float(value) if np.isfinite(value) else None
 
 
 def main() -> None:
+    """Run the command-line calibration-study example."""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--draws", type=int, default=256)

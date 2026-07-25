@@ -13,7 +13,19 @@ from .components import GaussianEnvelope, HarveyComponent, _positive_finite
 
 @dataclass(frozen=True, slots=True)
 class SpectralModel:
-    """White noise plus optional Harvey components and oscillation envelope."""
+    """White noise plus optional Harvey components and oscillation envelope.
+
+    Parameters
+    ----------
+    white_noise
+        Positive white-noise power density.
+    harvey_components
+        Background components.
+    envelope
+        Optional Gaussian oscillation envelope.
+    overdispersion
+        Factor reducing the nominal Gamma shape; must be at least one.
+    """
 
     white_noise: float
     harvey_components: tuple[HarveyComponent, ...] = ()
@@ -27,6 +39,8 @@ class SpectralModel:
         envelope: GaussianEnvelope | None = None,
         overdispersion: float = 1.0,
     ) -> None:
+        """Validate and store a complete spectral model."""
+
         components = tuple(harvey_components)
         if not all(isinstance(component, HarveyComponent) for component in components):
             raise TypeError("harvey_components must contain only HarveyComponent values")
@@ -43,7 +57,18 @@ class SpectralModel:
         object.__setattr__(self, "overdispersion", overdispersion)
 
     def mean_spectrum(self, frequency: ArrayLike) -> NDArray[np.float64]:
-        """Evaluate the positive limit spectrum."""
+        """Evaluate the positive limit spectrum.
+
+        Parameters
+        ----------
+        frequency
+            Non-negative one-dimensional frequency grid.
+
+        Returns
+        -------
+        numpy.ndarray
+            Expected power density.
+        """
 
         frequency_array = np.asarray(frequency, dtype=float)
         if frequency_array.ndim != 1:
@@ -65,7 +90,20 @@ class SpectralModel:
         *,
         quadrature_order: int = 16,
     ) -> NDArray[np.float64]:
-        """Average the limit spectrum over fixed frequency intervals."""
+        """Average the limit spectrum over fixed frequency intervals.
+
+        Parameters
+        ----------
+        lower, upper
+            Matching lower and upper frequency-bin edges.
+        quadrature_order
+            Gauss-Legendre order used for Harvey components.
+
+        Returns
+        -------
+        numpy.ndarray
+            Mean power density in each interval.
+        """
 
         from scipy.special import erf
 

@@ -20,7 +20,21 @@ MODEL_LABELS = ("noise", "granulation", "oscillation")
 
 @dataclass(frozen=True, slots=True)
 class InjectionCase:
-    """One simulated spectrum and its known generating class."""
+    """One simulated spectrum and its known generating class.
+
+    Parameters
+    ----------
+    name
+        Unique case identifier.
+    truth
+        Generating model label.
+    spectrum
+        Simulated power spectrum.
+    stellar_constraints
+        Measurements or precomputed AsteroScale samples used for recovery.
+    metadata
+        Optional injection coordinates and auxiliary information.
+    """
 
     name: str
     truth: str
@@ -29,19 +43,43 @@ class InjectionCase:
     metadata: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
+        """Validate the generating model label."""
+
         if self.truth not in MODEL_LABELS:
             raise ValueError(f"truth must be one of {MODEL_LABELS}")
 
 
 @dataclass(frozen=True, slots=True)
 class Recovery:
+    """Pair one injection with its detector result.
+
+    Parameters
+    ----------
+    case
+        Injected case.
+    result
+        Recovered detection result.
+    """
+
     case: InjectionCase
     result: DetectionResult
 
 
 @dataclass(frozen=True, slots=True)
 class ProbabilityBin:
-    """One bin in a binary probability-reliability diagram."""
+    """One bin in a binary probability-reliability diagram.
+
+    Parameters
+    ----------
+    lower, upper
+        Probability-bin edges.
+    count
+        Number of predictions in the bin.
+    mean_probability
+        Mean reported oscillation probability.
+    observed_frequency
+        Fraction of cases truly containing oscillations.
+    """
 
     lower: float
     upper: float
@@ -52,7 +90,27 @@ class ProbabilityBin:
 
 @dataclass(frozen=True, slots=True)
 class DetectionMetrics:
-    """Binary oscillation-detection metrics at a chosen threshold."""
+    """Binary oscillation-detection metrics at a chosen threshold.
+
+    Attributes
+    ----------
+    threshold
+        Oscillation-probability decision threshold.
+    true_positives, false_positives, true_negatives, false_negatives
+        Binary confusion counts.
+    completeness
+        True-positive rate.
+    false_positive_rate
+        False-positive rate.
+    precision
+        Fraction of positive classifications that are correct.
+    binary_brier_score
+        Mean squared probability error.
+    expected_calibration_error
+        Reliability-bin weighted calibration error.
+    reliability
+        Non-empty probability-reliability bins.
+    """
 
     threshold: float
     true_positives: int
@@ -69,6 +127,20 @@ class DetectionMetrics:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationResult:
+    """Aggregate results of an injection-recovery experiment.
+
+    Attributes
+    ----------
+    recoveries
+        Individual injected cases and detector outputs.
+    confusion_matrix
+        Three-class confusion matrix in ``MODEL_LABELS`` order.
+    accuracy
+        Fraction of correct maximum-probability classifications.
+    multiclass_brier_score
+        Mean three-class probability error.
+    """
+
     recoveries: tuple[Recovery, ...]
     confusion_matrix: NDArray[np.int64]
     accuracy: float
@@ -85,6 +157,18 @@ class CalibrationResult:
         Noise and granulation are both negative cases. This is the most useful
         view for reporting completeness and false-positive rates while the
         three-way confusion matrix retains the failure mode.
+
+        Parameters
+        ----------
+        threshold
+            Oscillation-probability decision threshold.
+        probability_bins
+            Number of equal reliability bins or explicit bin edges.
+
+        Returns
+        -------
+        DetectionMetrics
+            Binary detection and probability-calibration metrics.
         """
 
         threshold = float(threshold)
@@ -135,7 +219,18 @@ class CalibrationResult:
         )
 
     def subset(self, **metadata: Any) -> "CalibrationResult":
-        """Return metrics for recoveries matching all supplied metadata."""
+        """Return metrics for recoveries matching all supplied metadata.
+
+        Parameters
+        ----------
+        **metadata
+            Exact metadata key-value pairs to select.
+
+        Returns
+        -------
+        CalibrationResult
+            Recomputed summary of the selected recoveries.
+        """
 
         selected = tuple(
             recovery
@@ -151,7 +246,18 @@ class CalibrationResult:
         return summarize_recoveries(selected)
 
     def group_by(self, metadata_key: str) -> Mapping[Any, "CalibrationResult"]:
-        """Calculate separate calibration summaries for one metadata field."""
+        """Calculate separate calibration summaries for one metadata field.
+
+        Parameters
+        ----------
+        metadata_key
+            Metadata field defining the groups.
+
+        Returns
+        -------
+        mapping
+            Field values mapped to calibration summaries.
+        """
 
         groups: dict[Any, list[Recovery]] = {}
         for recovery in self.recoveries:
@@ -178,6 +284,22 @@ def build_injection_grid(
 
     The factory owns the astrophysical simulation. It receives a unique name,
     a read-only coordinate mapping, and an independent random generator.
+
+    Parameters
+    ----------
+    axes
+        Named grid axes and their coordinate values.
+    factory
+        Callable producing one :class:`InjectionCase`.
+    repeats
+        Independent stochastic realizations per grid point.
+    seed
+        Root random seed.
+
+    Returns
+    -------
+    tuple
+        Reproducibly ordered injection cases.
     """
 
     if not axes:
@@ -236,6 +358,24 @@ def build_detection_study(
     oscillation class is generated at every requested amplitude. This avoids
     accidentally duplicating the two negative classes across an irrelevant
     amplitude axis.
+
+    Parameters
+    ----------
+    axes
+        Astrophysical grid axes other than truth and amplitude.
+    factory
+        Callable producing one :class:`InjectionCase`.
+    oscillation_amplitudes
+        Relative oscillation amplitudes for positive cases.
+    repeats
+        Independent stochastic realizations per coordinate.
+    seed
+        Root random seed.
+
+    Returns
+    -------
+    tuple
+        Balanced noise, granulation, and oscillation cases.
     """
 
     if "truth" in axes or "amplitude_scale" in axes:
@@ -256,6 +396,8 @@ def build_detection_study(
         parameters: Mapping[str, Any],
         rng: np.random.Generator,
     ) -> InjectionCase:
+        """Translate a balanced-study class into factory parameters."""
+
         class_value = str(parameters["study_class"])
         forwarded = {
             key: value for key, value in parameters.items() if key != "study_class"
@@ -276,7 +418,18 @@ def build_detection_study(
 
 
 def summarize_recoveries(recoveries: Iterable[Recovery]) -> CalibrationResult:
-    """Calculate classification and probability metrics for recoveries."""
+    """Calculate classification and probability metrics for recoveries.
+
+    Parameters
+    ----------
+    recoveries
+        Injection and recovery pairs.
+
+    Returns
+    -------
+    CalibrationResult
+        Three-class confusion and probability summary.
+    """
 
     recovery_tuple = tuple(recoveries)
     if not recovery_tuple:
@@ -309,7 +462,22 @@ def probability_reliability(
     *,
     bins: int | Sequence[float] = 10,
 ) -> tuple[ProbabilityBin, ...]:
-    """Bin predicted probabilities and compare them with observed frequency."""
+    """Bin predicted probabilities and compare them with observed frequency.
+
+    Parameters
+    ----------
+    probabilities
+        Predicted probability of the positive class.
+    truth
+        Boolean positive-class indicators aligned with ``probabilities``.
+    bins
+        Number of equal bins or explicit edges spanning zero to one.
+
+    Returns
+    -------
+    tuple
+        Non-empty reliability bins.
+    """
 
     probability_array = np.asarray(probabilities, dtype=float)
     truth_array = np.asarray(truth, dtype=bool)
@@ -370,7 +538,20 @@ def threshold_curve(
     calibration: CalibrationResult,
     thresholds: Sequence[float] | NDArray[np.floating] = np.linspace(0, 1, 101),
 ) -> tuple[DetectionMetrics, ...]:
-    """Return completeness and false-positive rates over many thresholds."""
+    """Return completeness and false-positive rates over many thresholds.
+
+    Parameters
+    ----------
+    calibration
+        Completed injection-recovery summary.
+    thresholds
+        Decision thresholds to evaluate.
+
+    Returns
+    -------
+    tuple
+        Detection metrics aligned with ``thresholds``.
+    """
 
     return tuple(
         calibration.detection_metrics(threshold=float(threshold))
@@ -379,6 +560,8 @@ def threshold_curve(
 
 
 def _safe_ratio(numerator: int, denominator: int) -> float:
+    """Divide two counts, returning NaN for an empty denominator."""
+
     return float(numerator / denominator) if denominator else float("nan")
 
 
@@ -388,7 +571,22 @@ def evaluate_injections(
     *,
     seed: int | None = None,
 ) -> CalibrationResult:
-    """Run a reproducible injection set and calculate basic diagnostics."""
+    """Run a reproducible injection set and calculate basic diagnostics.
+
+    Parameters
+    ----------
+    detector
+        Configured end-to-end detector.
+    cases
+        Injection cases to recover.
+    seed
+        Root seed for independent per-case inference streams.
+
+    Returns
+    -------
+    CalibrationResult
+        Aggregate recovery and probability metrics.
+    """
 
     case_tuple = tuple(cases)
     if not case_tuple:

@@ -17,7 +17,21 @@ from .observation import ObservationModel
 
 @dataclass(frozen=True, slots=True)
 class SensitivityRun:
-    """One detector evaluation within a paired sensitivity study."""
+    """One detector evaluation within a paired sensitivity study.
+
+    Attributes
+    ----------
+    case_name, truth
+        Injection identifier and generating class.
+    draws, dnu_scale, estimator, repeat
+        Inference configuration.
+    probabilities, log_evidences
+        Three-model inference outputs.
+    effective_sample_sizes, log_evidence_standard_errors
+        Model-specific Monte Carlo diagnostics.
+    bin_width, binned_points
+        Fixed-binning summary.
+    """
 
     case_name: str
     truth: str
@@ -35,7 +49,26 @@ class SensitivityRun:
 
 @dataclass(frozen=True, slots=True)
 class SensitivitySummary:
-    """Aggregate diagnostics for one draw-count and bin-scale combination."""
+    """Aggregate diagnostics for one inference configuration.
+
+    Attributes
+    ----------
+    draws, dnu_scale, estimator
+        Inference configuration.
+    evaluations
+        Number of detector runs in the aggregate.
+    mean_oscillation_probability, oscillation_probability_std
+        Mean probability and mean fixed-case repeat scatter.
+    classification_accuracy
+        Fraction of maximum-probability classifications that are correct.
+    minimum_median_ess_fraction
+        Worst model-specific median ESS divided by draw count.
+    maximum_median_log_evidence_standard_error
+        Worst model-specific median log-evidence uncertainty.
+    minimum_truth_model_median_ess_fraction
+        Worst median ESS fraction when each injection is evaluated using its
+        known generating model.
+    """
 
     draws: int
     dnu_scale: float
@@ -46,11 +79,30 @@ class SensitivitySummary:
     classification_accuracy: float
     minimum_median_ess_fraction: float
     maximum_median_log_evidence_standard_error: float
+    minimum_truth_model_median_ess_fraction: float
 
 
 @dataclass(frozen=True, slots=True)
 class EstimatorComparison:
-    """Adaptive-estimator changes relative to prior sampling."""
+    """Adaptive-estimator changes relative to prior sampling.
+
+    Attributes
+    ----------
+    draws, dnu_scale
+        Matched inference configuration.
+    evaluations_per_estimator
+        Number of paired detector runs.
+    mean_absolute_oscillation_probability_difference
+        Mean absolute probability shift between estimators.
+    classification_accuracy_difference
+        Adaptive accuracy minus prior-sampling accuracy.
+    minimum_median_ess_fraction_ratio
+        Adaptive-to-prior ratio for the worst median ESS fraction.
+    maximum_median_log_evidence_standard_error_ratio
+        Adaptive-to-prior ratio for the worst evidence uncertainty.
+    minimum_truth_model_median_ess_fraction_ratio
+        Adaptive-to-prior ratio for the worst generating-model ESS fraction.
+    """
 
     draws: int
     dnu_scale: float
@@ -59,16 +111,29 @@ class EstimatorComparison:
     classification_accuracy_difference: float
     minimum_median_ess_fraction_ratio: float
     maximum_median_log_evidence_standard_error_ratio: float
+    minimum_truth_model_median_ess_fraction_ratio: float
 
 
 @dataclass(frozen=True, slots=True)
 class SensitivityStudy:
-    """Results of a paired detector sensitivity experiment."""
+    """Results of a paired detector sensitivity experiment.
+
+    Parameters
+    ----------
+    runs
+        Individual detector evaluations.
+    """
 
     runs: tuple[SensitivityRun, ...]
 
     def summaries(self) -> tuple[SensitivitySummary, ...]:
-        """Aggregate results by draw count and bin scale."""
+        """Aggregate results by draw count, bin scale, and estimator.
+
+        Returns
+        -------
+        tuple
+            One summary per unique inference configuration.
+        """
 
         groups: dict[tuple[int, float, str], list[SensitivityRun]] = {}
         for run in self.runs:
@@ -110,6 +175,17 @@ class SensitivityStudy:
                 )
                 for label in DetectorLabels
             ]
+            truth_model_medians = [
+                np.median(
+                    [
+                        run.effective_sample_sizes[run.truth] / draws
+                        for run in runs
+                        if run.truth == label
+                    ]
+                )
+                for label in DetectorLabels
+                if any(run.truth == label for run in runs)
+            ]
             summaries.append(
                 SensitivitySummary(
                     draws=draws,
@@ -127,12 +203,21 @@ class SensitivityStudy:
                     maximum_median_log_evidence_standard_error=float(
                         np.max(median_standard_errors)
                     ),
+                    minimum_truth_model_median_ess_fraction=float(
+                        np.min(truth_model_medians)
+                    ),
                 )
             )
         return tuple(summaries)
 
     def estimator_comparisons(self) -> tuple[EstimatorComparison, ...]:
-        """Compare adaptive and prior estimators for matched configurations."""
+        """Compare adaptive and prior estimators for matched configurations.
+
+        Returns
+        -------
+        tuple
+            Paired summaries where both estimators are available.
+        """
 
         grouped: dict[tuple[int, float, str], SensitivitySummary] = {
             (summary.draws, summary.dnu_scale, summary.estimator): summary
@@ -192,6 +277,10 @@ class SensitivityStudy:
                         adaptive.maximum_median_log_evidence_standard_error,
                         prior.maximum_median_log_evidence_standard_error,
                     ),
+                    minimum_truth_model_median_ess_fraction_ratio=_safe_ratio(
+                        adaptive.minimum_truth_model_median_ess_fraction,
+                        prior.minimum_truth_model_median_ess_fraction,
+                    ),
                 )
             )
         return tuple(comparisons)
@@ -201,6 +290,8 @@ DetectorLabels = ("noise", "granulation", "oscillation")
 
 
 def _safe_ratio(numerator: float, denominator: float) -> float:
+    """Return a stable ratio for non-negative diagnostics."""
+
     if denominator == 0:
         return float("inf") if numerator > 0 else 1.0
     return float(numerator / denominator)
@@ -220,6 +311,9 @@ def run_sensitivity_study(
     estimators: Sequence[str] = ("prior",),
     pilot_draws: int = 256,
     defensive_fraction: float = 0.2,
+    pilot_ess_fraction: float = 0.1,
+    proposal_degrees_of_freedom: float = 5.0,
+    stellar_draws_per_nuisance: int = 8,
 ) -> SensitivityStudy:
     """Compare Monte Carlo convergence and fixed binning choices.
 
@@ -227,6 +321,38 @@ def run_sensitivity_study(
     configuration is then evaluated with independent, reproducible inference
     seeds. Consequently, variation between configurations is not contaminated
     by different stochastic periodogram realizations.
+
+    Parameters
+    ----------
+    cases
+        Fixed injected spectra.
+    draw_counts
+        Final Monte Carlo sample counts to compare.
+    dnu_scales
+        Fixed bin widths in units of predicted large separation.
+    repeats
+        Independent inference repeats per configuration and case.
+    seed
+        Root random seed.
+    observation, nuisance_prior, model_probabilities
+        Detector configuration shared across runs.
+    minimum_envelope_bins
+        Minimum bins retained across the predicted envelope FWHM.
+    estimators
+        Evidence estimators to compare.
+    pilot_draws, defensive_fraction
+        Adaptive-estimator controls.
+    pilot_ess_fraction
+        Minimum pilot ESS fraction enforced through likelihood tempering.
+    proposal_degrees_of_freedom
+        Degrees of freedom of the adaptive Student proposal.
+    stellar_draws_per_nuisance
+        Intact AsteroScale rows averaged per adaptive nuisance point.
+
+    Returns
+    -------
+    SensitivityStudy
+        Paired per-run outputs and aggregation methods.
     """
 
     case_tuple = tuple(cases)
@@ -262,6 +388,9 @@ def run_sensitivity_study(
             estimator=estimator,
             pilot_draws=pilot_draws,
             defensive_fraction=defensive_fraction,
+            pilot_ess_fraction=pilot_ess_fraction,
+            proposal_degrees_of_freedom=proposal_degrees_of_freedom,
+            stellar_draws_per_nuisance=stellar_draws_per_nuisance,
         )
         result = detector.run(
             case.spectrum,
@@ -303,6 +432,8 @@ def run_sensitivity_study(
 def _positive_integer_sequence(
     values: Sequence[int], name: str
 ) -> tuple[int, ...]:
+    """Validate a non-empty sequence of positive integers."""
+
     result = tuple(values)
     if not result:
         raise ValueError(f"{name} cannot be empty")
@@ -320,6 +451,8 @@ def _positive_integer_sequence(
 def _positive_float_sequence(
     values: Sequence[float], name: str
 ) -> tuple[float, ...]:
+    """Validate a non-empty sequence of positive finite values."""
+
     result = tuple(float(value) for value in values)
     if not result:
         raise ValueError(f"{name} cannot be empty")
