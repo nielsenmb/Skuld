@@ -5,8 +5,10 @@ from asterodetect import (
     ObservingWindow,
     SpectralModel,
     continuous_observing_window,
+    observing_window_diagnostics,
     simulate_periodogram,
     simulate_windowed_periodogram,
+    tess_observing_window,
     tess_like_observing_window,
 )
 
@@ -44,6 +46,56 @@ def test_tess_like_window_is_reproducible_and_contains_structured_gaps():
     assert 0.9 < first.duty_cycle < 1.0
     downlink_sample = int(13.7 * 86400 / 120)
     assert not first.observed[downlink_sample]
+
+
+def test_tess_component_profiles_separate_gap_sources():
+    momentum = tess_observing_window(
+        27.4, 120.0, profile="momentum-dumps", rng=5
+    )
+    downlinks = tess_observing_window(
+        27.4, 120.0, profile="downlinks", rng=5
+    )
+    combined = tess_observing_window(
+        27.4, 120.0, profile="tess-like", rng=5
+    )
+    assert momentum.label == "momentum-dumps"
+    assert downlinks.label == "downlinks"
+    assert combined.duty_cycle < momentum.duty_cycle
+    assert combined.duty_cycle < downlinks.duty_cycle
+
+
+def test_random_loss_control_exactly_matches_combined_duty_cycle():
+    random_loss = tess_observing_window(
+        90.0, 120.0, profile="random-loss-matched", rng=12
+    )
+    combined = tess_observing_window(
+        90.0, 120.0, profile="tess-like", rng=12
+    )
+    assert random_loss.duty_cycle == combined.duty_cycle
+    assert not np.array_equal(random_loss.observed, combined.observed)
+
+
+def test_window_diagnostics_distinguish_random_and_structured_gaps():
+    random_loss = tess_observing_window(
+        90.0, 120.0, profile="random-loss-matched", rng=12
+    )
+    combined = tess_observing_window(
+        90.0, 120.0, profile="tess-like", rng=12
+    )
+    random_diagnostic = observing_window_diagnostics(random_loss)
+    combined_diagnostic = observing_window_diagnostics(combined)
+    assert random_diagnostic.duty_cycle == combined_diagnostic.duty_cycle
+    assert random_diagnostic.gap_count > combined_diagnostic.gap_count
+    assert random_diagnostic.maximum_gap_hours < combined_diagnostic.maximum_gap_hours
+    assert (
+        random_diagnostic.peak_sidelobe_power
+        < combined_diagnostic.peak_sidelobe_power
+    )
+
+
+def test_tess_window_profile_rejects_unknown_name():
+    with pytest.raises(ValueError, match="profile must be"):
+        tess_observing_window(27.4, 120.0, profile="mystery")
 
 
 def test_gapped_window_preserves_white_noise_level_but_correlates_bins():

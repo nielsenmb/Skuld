@@ -67,6 +67,14 @@ DEFAULT_MODE_VISIBILITIES = MappingProxyType(
     {0: 1.0, 1: 1.5, 2: 0.5, 3: 0.04}
 )
 
+TESS_WINDOW_PROFILES = (
+    "continuous",
+    "momentum-dumps",
+    "downlinks",
+    "random-loss-matched",
+    "tess-like",
+)
+
 
 def regular_frequency_grid(
     duration_days: float,
@@ -155,6 +163,29 @@ class ObservingWindow:
         """Return the scheduled baseline in days."""
 
         return self.observed.size * self.cadence_seconds / 86400.0
+
+
+@dataclass(frozen=True, slots=True)
+class ObservingWindowDiagnostic:
+    """Compact diagnostics for an observing mask.
+
+    Attributes
+    ----------
+    duty_cycle
+        Fraction of scheduled cadences retained.
+    gap_count
+        Number of distinct runs of missing cadences.
+    maximum_gap_hours
+        Duration of the longest uninterrupted gap.
+    peak_sidelobe_power
+        Largest non-zero-frequency spectral-window power relative to the
+        zero-frequency peak.
+    """
+
+    duty_cycle: float
+    gap_count: int
+    maximum_gap_hours: float
+    peak_sidelobe_power: float
 
 
 def continuous_observing_window(
@@ -255,6 +286,130 @@ def tess_like_observing_window(
     if loss > 0:
         observed &= _as_generator(rng).random(samples) >= loss
     return ObservingWindow(observed, cadence_seconds, label="tess-like")
+
+
+def tess_observing_window(
+    duration_days: float,
+    cadence_seconds: float,
+    *,
+    profile: str,
+    momentum_dump_interval_days: float = 2.5,
+    momentum_dump_duration_minutes: float = 30.0,
+    rng: np.random.Generator | int | None = None,
+) -> ObservingWindow:
+    """Construct one component or control profile of a TESS-like window.
+
+    Parameters
+    ----------
+    duration_days, cadence_seconds
+        Scheduled observing baseline and cadence.
+    profile
+        One of ``"continuous"``, ``"momentum-dumps"``, ``"downlinks"``,
+        ``"random-loss-matched"``, or ``"tess-like"``.
+    momentum_dump_interval_days, momentum_dump_duration_minutes
+        Spacing and duration of momentum-dump gaps. These affect profiles
+        containing momentum dumps and their matched random-loss controls.
+    rng
+        Random generator or seed controlling independent cadence losses.
+
+    Returns
+    -------
+    ObservingWindow
+        Requested immutable observing mask.
+
+    Notes
+    -----
+    The random-loss control removes exactly as many cadences as the combined
+    TESS-like profile, but places them independently. It therefore matches
+    duty cycle while removing the long, coherent gap structure.
+    """
+
+    profile = str(profile)
+    if profile not in TESS_WINDOW_PROFILES:
+        raise ValueError(
+            "profile must be one of " + ", ".join(TESS_WINDOW_PROFILES)
+        )
+    if profile == "continuous":
+        return continuous_observing_window(duration_days, cadence_seconds)
+    if profile == "momentum-dumps":
+        window = tess_like_observing_window(
+            duration_days,
+            cadence_seconds,
+            downlink_duration_hours=0.0,
+            momentum_dump_interval_days=momentum_dump_interval_days,
+            momentum_dump_duration_minutes=momentum_dump_duration_minutes,
+            random_loss_fraction=0.0,
+            rng=rng,
+        )
+        return ObservingWindow(
+            window.observed, cadence_seconds, label="momentum-dumps"
+        )
+    if profile == "downlinks":
+        window = tess_like_observing_window(
+            duration_days,
+            cadence_seconds,
+            momentum_dump_duration_minutes=0.0,
+            random_loss_fraction=0.0,
+            rng=rng,
+        )
+        return ObservingWindow(window.observed, cadence_seconds, label="downlinks")
+
+    combined = tess_like_observing_window(
+        duration_days,
+        cadence_seconds,
+        momentum_dump_interval_days=momentum_dump_interval_days,
+        momentum_dump_duration_minutes=momentum_dump_duration_minutes,
+        rng=rng,
+    )
+    if profile == "tess-like":
+        return combined
+
+    generator = _as_generator(rng)
+    missing = int(np.count_nonzero(~combined.observed))
+    observed = np.ones(combined.observed.size, dtype=bool)
+    if missing:
+        observed[generator.choice(observed.size, missing, replace=False)] = False
+    return ObservingWindow(
+        observed,
+        cadence_seconds,
+        label="random-loss-matched",
+    )
+
+
+def observing_window_diagnostics(
+    window: ObservingWindow,
+) -> ObservingWindowDiagnostic:
+    """Measure duty cycle, gap structure, and the strongest window sidelobe.
+
+    Parameters
+    ----------
+    window
+        Regularly sampled observing mask.
+
+    Returns
+    -------
+    ObservingWindowDiagnostic
+        Scalar diagnostics describing missing time and spectral leakage.
+    """
+
+    if not isinstance(window, ObservingWindow):
+        raise TypeError("window must be an ObservingWindow")
+    missing = ~window.observed
+    gap_starts = missing & np.concatenate(([True], ~missing[:-1]))
+    gap_count = int(np.count_nonzero(gap_starts))
+    maximum_gap = 0
+    if gap_count:
+        padded = np.concatenate(([False], missing, [False])).astype(np.int8)
+        changes = np.flatnonzero(np.diff(padded))
+        maximum_gap = int(np.max(changes[1::2] - changes[::2]))
+    transform = np.fft.rfft(window.observed.astype(float))
+    sidelobes = np.abs(transform[1:]) ** 2 / np.abs(transform[0]) ** 2
+    return ObservingWindowDiagnostic(
+        duty_cycle=window.duty_cycle,
+        gap_count=gap_count,
+        maximum_gap_hours=maximum_gap * window.cadence_seconds / 3600.0,
+        peak_sidelobe_power=float(np.max(sidelobes, initial=0.0)),
+    )
 
 
 def simulate_windowed_periodogram(
@@ -465,8 +620,9 @@ class AstrophysicalInjectionFactory:
         Granulation bolometric correction.
     window_profile
         ``"independent"`` for the original independent-bin simulation,
-        ``"continuous"`` for a time-domain uninterrupted simulation, or
-        ``"tess-like"`` for the configurable gapped approximation.
+        ``"continuous"`` for a time-domain uninterrupted simulation, or one
+        of the component, matched-random, or combined TESS window profiles in
+        ``TESS_WINDOW_PROFILES``.
     """
 
     stellar_samples: AsteroScaleSamples
@@ -542,9 +698,11 @@ class AstrophysicalInjectionFactory:
         window_profile = str(
             parameters.get("window_profile", self.window_profile)
         )
-        if window_profile not in {"independent", "continuous", "tess-like"}:
+        allowed_profiles = {"independent", *TESS_WINDOW_PROFILES}
+        if window_profile not in allowed_profiles:
             raise ValueError(
-                "window_profile must be independent, continuous, or tess-like"
+                "window_profile must be independent or a supported TESS "
+                "window profile"
             )
 
         medians = {
@@ -604,17 +762,28 @@ class AstrophysicalInjectionFactory:
         if window_profile == "independent":
             power = rng.exponential(mean)
             duty_cycle = 1.0
+            gap_count = 0
+            maximum_gap_hours = 0.0
+            peak_sidelobe_power = 0.0
         else:
-            if window_profile == "continuous":
-                window = continuous_observing_window(duration, cadence)
-            else:
-                window = tess_like_observing_window(
-                    duration,
-                    cadence,
-                    rng=parameters.get("window_seed", 0),
-                )
+            window = tess_observing_window(
+                duration,
+                cadence,
+                profile=window_profile,
+                momentum_dump_interval_days=parameters.get(
+                    "momentum_dump_interval_days", 2.5
+                ),
+                momentum_dump_duration_minutes=parameters.get(
+                    "momentum_dump_duration_minutes", 30.0
+                ),
+                rng=parameters.get("window_seed", 0),
+            )
             power = simulate_windowed_periodogram(mean, window, rng=rng)
-            duty_cycle = window.duty_cycle
+            diagnostics = observing_window_diagnostics(window)
+            duty_cycle = diagnostics.duty_cycle
+            gap_count = diagnostics.gap_count
+            maximum_gap_hours = diagnostics.maximum_gap_hours
+            peak_sidelobe_power = diagnostics.peak_sidelobe_power
         metadata = {
             "truth": truth,
             "duration_days": duration,
@@ -626,8 +795,18 @@ class AstrophysicalInjectionFactory:
             "linewidth": linewidth,
             "numax": medians["numax"],
             "dnu": medians["dnu"],
+            "fwhm_envelope": medians["FWHM_env"],
             "window_profile": window_profile,
             "duty_cycle": duty_cycle,
+            "gap_count": gap_count,
+            "maximum_gap_hours": maximum_gap_hours,
+            "peak_sidelobe_power": peak_sidelobe_power,
+            "momentum_dump_interval_days": float(
+                parameters.get("momentum_dump_interval_days", 2.5)
+            ),
+            "momentum_dump_duration_minutes": float(
+                parameters.get("momentum_dump_duration_minutes", 30.0)
+            ),
         }
         return InjectionCase(
             name=name,
