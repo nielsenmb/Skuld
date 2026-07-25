@@ -142,6 +142,22 @@ class CalibrationSplit:
 
 
 @dataclass(frozen=True, slots=True)
+class InjectionSplit:
+    """Injection cases separated before any detector evaluation.
+
+    Attributes
+    ----------
+    tuning
+        Cases available for selecting priors or operating thresholds.
+    validation
+        Cases reserved for one final performance evaluation.
+    """
+
+    tuning: tuple[InjectionCase, ...]
+    validation: tuple[InjectionCase, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class CalibrationResult:
     """Aggregate results of an injection-recovery experiment.
 
@@ -373,6 +389,81 @@ def split_calibration(
         tuning=summarize_recoveries(tuning),
         validation=summarize_recoveries(validation),
     )
+
+
+def split_injections(
+    cases: Sequence[InjectionCase],
+    *,
+    validation_fraction: float = 0.5,
+    stratify_by: Sequence[str] = ("truth",),
+    seed: int | None = None,
+) -> InjectionSplit:
+    """Split injections before tuning any detector hyperparameters.
+
+    Splitting cases before inference prevents validation probabilities from
+    being inspected while selecting a nuisance prior. Assignment is
+    reproducible and stratified in the same way as :func:`split_calibration`.
+
+    Parameters
+    ----------
+    cases
+        Injection cases containing independent stochastic realizations.
+    validation_fraction
+        Fraction of every stratum reserved for validation.
+    stratify_by
+        Generating-class or metadata fields defining the strata.
+    seed
+        Random seed controlling assignment within each stratum.
+
+    Returns
+    -------
+    InjectionSplit
+        Tuning and validation cases.
+
+    Raises
+    ------
+    ValueError
+        If the fraction or fields are invalid, a field is missing, or a
+        stratum contains fewer than two cases.
+    """
+
+    fraction = float(validation_fraction)
+    if not np.isfinite(fraction) or not 0 < fraction < 1:
+        raise ValueError("validation_fraction must be finite and in (0, 1)")
+    fields = tuple(stratify_by)
+    if not fields:
+        raise ValueError("stratify_by must contain at least one field")
+
+    groups: dict[tuple[Any, ...], list[InjectionCase]] = {}
+    for case in cases:
+        values = []
+        for field in fields:
+            if field == "truth":
+                values.append(case.truth)
+                continue
+            metadata = case.metadata
+            if metadata is None or field not in metadata:
+                raise ValueError(
+                    f"injection {case.name!r} lacks stratification field "
+                    f"{field!r}"
+                )
+            values.append(metadata[field])
+        groups.setdefault(tuple(values), []).append(case)
+
+    rng = np.random.default_rng(seed)
+    tuning: list[InjectionCase] = []
+    validation: list[InjectionCase] = []
+    for key, group in groups.items():
+        if len(group) < 2:
+            raise ValueError(f"stratum {key!r} needs at least two independent cases")
+        validation_count = int(np.rint(fraction * len(group)))
+        validation_count = min(max(validation_count, 1), len(group) - 1)
+        order = rng.permutation(len(group))
+        validation_indices = set(order[:validation_count])
+        for index, case in enumerate(group):
+            (validation if index in validation_indices else tuning).append(case)
+
+    return InjectionSplit(tuple(tuning), tuple(validation))
 
 
 def select_detection_threshold(

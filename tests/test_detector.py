@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from asterodetect import AsteroScaleSamples, Detector, NuisancePrior, PowerSpectrum
 from asterodetect.asteroscale import ASTERO_SCALE_PARAMETERS
@@ -43,6 +44,50 @@ def test_nuisance_draws_are_valid_and_scatter_can_be_disabled():
     np.testing.assert_allclose(draws["overdispersion"], 1)
     split = draws["granulation_variance_fraction_low"]
     assert np.all((split > 0) & (split < 1))
+
+
+def test_suppressed_amplitude_mixture_has_requested_weight_and_means():
+    prior = NuisancePrior(
+        envelope_log_scatter=0,
+        envelope_suppressed_fraction=0.25,
+        envelope_suppression_factor=0.3,
+        envelope_suppressed_log_scatter=0,
+    )
+    draws = prior.sample(_raw_spectrum(), 40_000, rng=14)
+    envelope = draws["envelope_scale"]
+    suppressed = np.isclose(envelope, 0.3)
+    assert np.mean(suppressed) == pytest.approx(0.25, abs=0.01)
+    np.testing.assert_allclose(envelope[suppressed], 0.3)
+    np.testing.assert_allclose(envelope[~suppressed], 1.0)
+
+
+def test_zero_suppressed_fraction_recovers_original_lognormal_transform():
+    prior = NuisancePrior(
+        envelope_log_scatter=0.4,
+        envelope_suppressed_fraction=0,
+    )
+    latent = np.zeros((3, len(prior.latent_names)))
+    latent[:, 1] = [-1.0, 0.0, 1.0]
+    transformed = prior.transform_latent(latent, white_noise_centre=1.0)
+    expected = np.exp(-0.5 * 0.4**2 + 0.4 * latent[:, 1])
+    np.testing.assert_allclose(transformed["envelope_scale"], expected)
+
+
+@pytest.mark.parametrize(
+    ("keyword", "value", "message"),
+    [
+        ("envelope_suppressed_fraction", -0.1, "fraction"),
+        ("envelope_suppressed_fraction", 1.0, "fraction"),
+        ("envelope_suppression_factor", 0.0, "factor"),
+        ("envelope_suppression_factor", 1.1, "factor"),
+        ("envelope_suppressed_log_scatter", -0.1, "scatter"),
+    ],
+)
+def test_suppressed_amplitude_prior_validates_hyperparameters(
+    keyword, value, message
+):
+    with pytest.raises(ValueError, match=message):
+        NuisancePrior(**{keyword: value})
 
 
 def test_adaptive_detector_is_reproducible_and_improves_noise_ess():

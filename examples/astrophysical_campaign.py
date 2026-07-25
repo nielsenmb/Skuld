@@ -19,11 +19,12 @@ from asterodetect import (
     AstrophysicalInjectionFactory,
     CalibrationResult,
     Detector,
+    NuisancePrior,
     ObservationModel,
     build_regime_detection_study,
     evaluate_injections,
     select_detection_threshold,
-    split_calibration,
+    split_injections,
 )
 from asterodetect.asteroscale import ASTERO_SCALE_PARAMETERS
 
@@ -70,6 +71,26 @@ SPLIT_FIELDS = (
     "dilution",
     "granulation_scale",
 )
+
+AMPLITUDE_PRIOR_CANDIDATES = {
+    "single": NuisancePrior(),
+    "mixture-0.10-at-0.3": NuisancePrior(
+        envelope_suppressed_fraction=0.10,
+        envelope_suppression_factor=0.3,
+    ),
+    "mixture-0.25-at-0.3": NuisancePrior(
+        envelope_suppressed_fraction=0.25,
+        envelope_suppression_factor=0.3,
+    ),
+    "mixture-0.50-at-0.3": NuisancePrior(
+        envelope_suppressed_fraction=0.50,
+        envelope_suppression_factor=0.3,
+    ),
+    "mixture-0.25-at-0.5": NuisancePrior(
+        envelope_suppressed_fraction=0.25,
+        envelope_suppression_factor=0.5,
+    ),
+}
 
 
 def regime_samples(
@@ -231,6 +252,29 @@ def _finite_or_none(value: float) -> float | None:
     return float(value) if np.isfinite(value) else None
 
 
+def _detector(draws: int, prior: NuisancePrior) -> Detector:
+    """Construct the common adaptive detector for one amplitude prior."""
+
+    return Detector(
+        draws=draws,
+        estimator="adaptive",
+        nuisance_prior=prior,
+        observation=ObservationModel(integration_time_seconds=120.0),
+        dnu_scale=1.0,
+    )
+
+
+def _prior_description(prior: NuisancePrior) -> dict[str, float]:
+    """Return JSON-safe amplitude-mixture hyperparameters."""
+
+    return {
+        "normal_log_scatter": prior.envelope_log_scatter,
+        "suppressed_fraction": prior.envelope_suppressed_fraction,
+        "suppression_factor": prior.envelope_suppression_factor,
+        "suppressed_log_scatter": prior.envelope_suppressed_log_scatter,
+    }
+
+
 def run_campaign(
     *,
     profile: str,
@@ -261,25 +305,57 @@ def run_campaign(
     """
 
     cases = build_campaign(profile=profile, repeats=repeats, seed=seed)
-    detector = Detector(
-        draws=draws,
-        estimator="adaptive",
-        observation=ObservationModel(integration_time_seconds=120.0),
-        dnu_scale=1.0,
-    )
-    calibration = evaluate_injections(detector, cases, seed=seed + 20)
-    split = split_calibration(
-        calibration,
+    split = split_injections(
+        cases,
         validation_fraction=0.5,
         stratify_by=SPLIT_FIELDS,
         seed=seed + 30,
     )
-    selected = select_detection_threshold(
-        split.tuning,
-        np.linspace(0.05, 1.0, 20),
-        maximum_false_positive_rate=maximum_false_positive_rate,
+    candidates = {}
+    candidate_calibrations = {}
+    candidate_metrics = {}
+    thresholds = np.linspace(0.05, 1.0, 20)
+    candidate_order = {
+        label: index for index, label in enumerate(AMPLITUDE_PRIOR_CANDIDATES)
+    }
+    for label, prior in AMPLITUDE_PRIOR_CANDIDATES.items():
+        calibration = evaluate_injections(
+            _detector(draws, prior),
+            split.tuning,
+            seed=seed + 100,
+        )
+        selected = select_detection_threshold(
+            calibration,
+            thresholds,
+            maximum_false_positive_rate=maximum_false_positive_rate,
+        )
+        candidate_calibrations[label] = calibration
+        candidate_metrics[label] = selected
+        candidates[label] = {
+            "prior": _prior_description(prior),
+            "tuning": _metrics(calibration, threshold=selected.threshold),
+        }
+
+    def candidate_score(label: str) -> tuple[float, float, float, int]:
+        """Rank candidate priors using tuning results only."""
+
+        metrics = candidate_metrics[label]
+        return (
+            metrics.completeness,
+            -metrics.binary_brier_score,
+            -metrics.false_positive_rate,
+            -candidate_order[label],
+        )
+
+    selected_label = max(candidate_metrics, key=candidate_score)
+    selected_prior = AMPLITUDE_PRIOR_CANDIDATES[selected_label]
+    threshold = candidate_metrics[selected_label].threshold
+    tuning = candidate_calibrations[selected_label]
+    validation = evaluate_injections(
+        _detector(draws, selected_prior),
+        split.validation,
+        seed=seed + 1000,
     )
-    threshold = selected.threshold
     return {
         "profile": profile,
         "estimator": "adaptive",
@@ -287,46 +363,36 @@ def run_campaign(
         "repeats": repeats,
         "seed": seed,
         "maximum_false_positive_rate": maximum_false_positive_rate,
-        "overall": _metrics(calibration),
-        "tuning": _metrics(split.tuning, threshold=threshold),
-        "validation": _metrics(split.validation, threshold=threshold),
+        "amplitude_prior_candidates": candidates,
+        "selected_amplitude_prior": selected_label,
+        "selected_amplitude_prior_parameters": _prior_description(selected_prior),
+        "tuning": _metrics(tuning, threshold=threshold),
+        "validation": _metrics(validation, threshold=threshold),
         "selected_threshold": threshold,
-        "validation_at_default_threshold": _metrics(split.validation),
+        "validation_at_default_threshold": _metrics(validation),
         "validation_at_default_by_amplitude_scale": _group_metrics(
-            split.validation, "amplitude_scale"
+            validation, "amplitude_scale"
         ),
         "validation_by_stellar_regime": _group_metrics(
-            split.validation, "stellar_regime", threshold=threshold
+            validation, "stellar_regime", threshold=threshold
         ),
         "validation_by_duration_days": _group_metrics(
-            split.validation, "duration_days", threshold=threshold
+            validation, "duration_days", threshold=threshold
         ),
         "validation_by_amplitude_scale": _group_metrics(
-            split.validation, "amplitude_scale", threshold=threshold
+            validation, "amplitude_scale", threshold=threshold
         ),
         "validation_by_regime_and_amplitude": _cross_group_metrics(
-            split.validation,
+            validation,
             "stellar_regime",
             "amplitude_scale",
             threshold=threshold,
         ),
         "validation_by_dilution": _group_metrics(
-            split.validation, "dilution", threshold=threshold
+            validation, "dilution", threshold=threshold
         ),
         "validation_by_granulation_scale": _group_metrics(
-            split.validation, "granulation_scale", threshold=threshold
-        ),
-        "by_stellar_regime": _group_metrics(calibration, "stellar_regime"),
-        "by_duration_days": _group_metrics(calibration, "duration_days"),
-        "by_amplitude_scale": _group_metrics(
-            calibration, "amplitude_scale"
-        ),
-        "by_regime_and_amplitude": _cross_group_metrics(
-            calibration, "stellar_regime", "amplitude_scale"
-        ),
-        "by_dilution": _group_metrics(calibration, "dilution"),
-        "by_granulation_scale": _group_metrics(
-            calibration, "granulation_scale"
+            validation, "granulation_scale", threshold=threshold
         ),
     }
 

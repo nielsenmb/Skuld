@@ -6,6 +6,7 @@ from asterodetect import (
     PowerSpectrum, Recovery, build_detection_study, build_injection_grid,
     build_regime_detection_study, evaluate_injections,
     probability_reliability, select_detection_threshold, split_calibration,
+    split_injections,
     summarize_recoveries, threshold_curve,
 )
 from asterodetect.detector import DetectionResult
@@ -275,6 +276,35 @@ def test_calibration_split_requires_independent_repeats_per_stratum():
     calibration = summarize_recoveries([_recovery("only", "noise", 0.1)])
     with pytest.raises(ValueError, match="at least two"):
         split_calibration(calibration)
+
+
+def test_injection_split_hides_validation_before_inference():
+    cases = []
+    for truth in ("noise", "oscillation"):
+        for repeat in range(4):
+            recovery = _recovery(f"{truth}-{repeat}", truth, 0.5)
+            cases.append(
+                InjectionCase(
+                    recovery.case.name,
+                    truth,
+                    recovery.case.spectrum,
+                    recovery.case.stellar_constraints,
+                    metadata={"repeat": repeat, "regime": "dwarf"},
+                )
+            )
+    first = split_injections(
+        cases, stratify_by=("truth", "regime"), seed=9
+    )
+    second = split_injections(
+        cases, stratify_by=("truth", "regime"), seed=9
+    )
+    assert len(first.tuning) == len(first.validation) == 4
+    assert [case.name for case in first.validation] == [
+        case.name for case in second.validation
+    ]
+    assert {case.name for case in first.tuning}.isdisjoint(
+        case.name for case in first.validation
+    )
 
 
 def test_select_threshold_maximizes_completeness_under_false_positive_limit():

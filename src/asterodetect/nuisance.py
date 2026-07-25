@@ -27,6 +27,14 @@ class NuisancePrior:
         Natural-log scatter of the white-noise level.
     envelope_log_scatter
         Natural-log scatter of the oscillation amplitude multiplier.
+    envelope_suppressed_fraction
+        Prior probability assigned to a suppressed-amplitude component.
+        Zero recovers the original single-lognormal prior.
+    envelope_suppression_factor
+        Mean amplitude multiplier of the suppressed component relative to
+        the AsteroScale prediction.
+    envelope_suppressed_log_scatter
+        Natural-log scatter of the suppressed-amplitude component.
     granulation_log_scatter
         Natural-log scatter of the granulation amplitude multiplier.
     granulation_split_concentration
@@ -39,6 +47,9 @@ class NuisancePrior:
 
     white_noise_log_scatter: float = 0.35
     envelope_log_scatter: float = 0.35
+    envelope_suppressed_fraction: float = 0.0
+    envelope_suppression_factor: float = 0.3
+    envelope_suppressed_log_scatter: float = 0.35
     granulation_log_scatter: float = 0.25
     granulation_split_concentration: float = 20.0
     overdispersion_log_scatter: float = 0.25
@@ -58,6 +69,7 @@ class NuisancePrior:
         for name in (
             "white_noise_log_scatter",
             "envelope_log_scatter",
+            "envelope_suppressed_log_scatter",
             "granulation_log_scatter",
             "overdispersion_log_scatter",
         ):
@@ -65,6 +77,22 @@ class NuisancePrior:
             if not np.isfinite(value) or value < 0:
                 raise ValueError(f"{name} must be finite and non-negative")
             object.__setattr__(self, name, value)
+        suppressed_fraction = float(self.envelope_suppressed_fraction)
+        if not np.isfinite(suppressed_fraction) or not 0 <= suppressed_fraction < 1:
+            raise ValueError("envelope_suppressed_fraction must be in [0, 1)")
+        object.__setattr__(
+            self, "envelope_suppressed_fraction", suppressed_fraction
+        )
+        suppression_factor = float(self.envelope_suppression_factor)
+        if (
+            not np.isfinite(suppression_factor)
+            or suppression_factor <= 0
+            or suppression_factor > 1
+        ):
+            raise ValueError("envelope_suppression_factor must be in (0, 1]")
+        object.__setattr__(
+            self, "envelope_suppression_factor", suppression_factor
+        )
         concentration = float(self.granulation_split_concentration)
         if not np.isfinite(concentration) or concentration <= 0:
             raise ValueError(
@@ -181,6 +209,41 @@ class NuisancePrior:
             # Mean-one multiplier, so widening the prior does not move its mean.
             return np.exp(-0.5 * scatter**2 + scatter * z)
 
+        def envelope_mixture(z: NDArray[np.float64]) -> NDArray[np.float64]:
+            """Transform one Normal coordinate into the amplitude mixture."""
+
+            fraction = self.envelope_suppressed_fraction
+            if fraction == 0:
+                return lognormal(z, self.envelope_log_scatter)
+            probability = np.clip(
+                norm.cdf(z),
+                np.finfo(float).eps,
+                1 - np.finfo(float).eps,
+            )
+            suppressed = probability < fraction
+            component_probability = np.empty_like(probability)
+            component_probability[suppressed] = (
+                probability[suppressed] / fraction
+            )
+            component_probability[~suppressed] = (
+                probability[~suppressed] - fraction
+            ) / (1 - fraction)
+            component_probability = np.clip(
+                component_probability,
+                np.finfo(float).eps,
+                1 - np.finfo(float).eps,
+            )
+            component_latent = norm.ppf(component_probability)
+            result = lognormal(component_latent, self.envelope_log_scatter)
+            result[suppressed] = (
+                self.envelope_suppression_factor
+                * lognormal(
+                    component_latent[suppressed],
+                    self.envelope_suppressed_log_scatter,
+                )
+            )
+            return result
+
         alpha = 0.5 * self.granulation_split_concentration
         probability = np.clip(
             norm.cdf(values[:, 3]),
@@ -191,9 +254,7 @@ class NuisancePrior:
             {
                 "white_noise": centre
                 * lognormal(values[:, 0], self.white_noise_log_scatter),
-                "envelope_scale": lognormal(
-                    values[:, 1], self.envelope_log_scatter
-                ),
+                "envelope_scale": envelope_mixture(values[:, 1]),
                 "granulation_scale": lognormal(
                     values[:, 2], self.granulation_log_scatter
                 ),
