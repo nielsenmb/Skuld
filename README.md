@@ -255,6 +255,38 @@ This example is deliberately small. A scientific calibration needs many more
 independent realizations and should reserve a separate validation population
 for selecting the final probability threshold.
 
+### Evidence and binning sensitivity
+
+Before increasing the astrophysical grid, use `run_sensitivity_study` to check
+whether the prior-predictive evidence is stable and whether the chosen
+frequency binning changes the answer:
+
+```python
+from asterodetect import run_sensitivity_study
+
+study = run_sensitivity_study(
+    cases,
+    draw_counts=[128, 512, 2048],
+    dnu_scales=[0.5, 1.0, 2.0],
+    repeats=4,
+    seed=123,
+)
+for summary in study.summaries():
+    print(summary)
+```
+
+The injected spectra are paired: exactly the same periodogram realization is
+used for every inference configuration. Independent inference repeats then
+measure Monte Carlo variation in the evidence calculation. Each summary
+reports probability scatter, classification accuracy, the lowest median ESS
+fraction among the three models, and the largest median log-evidence standard
+error. A high model probability is not considered converged merely because it
+is close to zero or one.
+
+The runnable `examples/sensitivity_study.py` writes the same diagnostics to
+JSON. `notebooks/03_evidence_and_binning_sensitivity.ipynb` illustrates how to
+inspect the results.
+
 ### Astrophysical injections
 
 `AstrophysicalInjectionFactory` supplies a standard simulation policy. It
@@ -290,7 +322,8 @@ belong in a later model-misspecification experiment.
 Tutorial notebooks are in `notebooks/`. Install their dependencies with
 `uv sync --extra tutorial`, then start with
 `01_models_and_binning.ipynb` and continue to
-`02_injection_recovery.ipynb`.
+`02_injection_recovery.ipynb`, then
+`03_evidence_and_binning_sensitivity.ipynb`.
 
 ## Development install
 

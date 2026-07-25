@@ -37,6 +37,12 @@ from .simulation import (
     regular_frequency_grid,
     simulate_periodogram,
 )
+from .sensitivity import (
+    SensitivityRun,
+    SensitivityStudy,
+    SensitivitySummary,
+    run_sensitivity_study,
+)
 
 __all__ = [
     "GaussianEnvelope",
@@ -69,6 +75,10 @@ __all__ = [
     "simulate_periodogram",
     "lorentzian_mode_comb",
     "regular_frequency_grid",
+    "SensitivityRun",
+    "SensitivityStudy",
+    "SensitivitySummary",
+    "run_sensitivity_study",
     "build_detection_study",
     "build_injection_grid",
     "evaluate_injections",

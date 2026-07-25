@@ -119,6 +119,12 @@ tutorial = [
     { name = "matplotlib", version = "3.11.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "asteroscale", git = "https://github.com/nielsenmb/AsteroScale.git?rev=c348e95dad2769e534176050ddf7b644495b2d59" },
@@ -131,6 +137,12 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.10" },
 ]
 provides-extras = ["test", "tutorial"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=7" },
+    { name = "pytest-cov", specifier = ">=4" },
+]
 
 [[package]]
 name = "asteroscale"
