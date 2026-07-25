@@ -430,6 +430,16 @@ The built-in TESS-like approximation combines longer periodic downlink gaps,
 shorter interruptions, and a small fraction of randomly missing cadences.
 Its parameters are configurable through `tess_like_observing_window`; it is
 not intended to reproduce the quality flags of a particular observed target.
+For controlled experiments, `tess_observing_window` can construct the
+continuous, momentum-dump-only, downlink-only, combined, and
+`random-loss-matched` profiles separately. The matched-random profile removes
+exactly as many cadences as the combined profile but scatters them randomly.
+It is therefore a control for asking whether a result follows total observing
+time or coherent gap structure.
+
+`observing_window_diagnostics` reports the duty cycle, number of gaps, longest
+gap, and strongest non-zero spectral-window sidelobe. These are properties of
+the mask, not detector performance metrics.
 
 The detector deliberately continues to use its independent-Gamma likelihood
 for these spectra. The experiment therefore measures robustness to unmodelled
@@ -504,6 +514,78 @@ pairs, 13 detections were lost and 6 were gained. These remain calibration
 checkpoint statistics, with two validation realizations per exact grid cell,
 but they show that high duty cycle alone does not make spectral-window effects
 negligible.
+
+### Focused full-amplitude window study
+
+`examples/focused_window_study.py` removes the deliberately suppressed
+oscillators from the comparison and freezes the previously selected
+probability threshold at 0.45. It applies five windows to each of 96
+full-amplitude stellar realizations while sharing both the injected Fourier
+realization and inference seed:
+
+```bash
+uv run python examples/focused_window_study.py \
+  --repeats 8 \
+  --draws 256 \
+  --threshold 0.45 \
+  --skip-interval-sweep \
+  --output focused-window-study.json
+```
+
+The 480-evaluation study found:
+
+| Window | Duty cycle | Full-amplitude TPR | Mean oscillation probability |
+| --- | ---: | ---: | ---: |
+| Continuous | 100.0% | 94.8% | 0.939 |
+| Momentum dumps only | 99.2% | 86.5% | 0.853 |
+| Downlinks only | 96.6% | 94.8% | 0.928 |
+| Random loss matched to TESS-like | 95.3% | 95.8% | 0.932 |
+| Combined TESS-like | 95.3% | 88.5% | 0.873 |
+
+The combined window produced nine lost and three gained detections relative
+to continuous data (exact paired \(p=0.146\)). The momentum-dump-only profile
+produced ten lost and two gained detections (\(p=0.039\)). That loss was
+localized to the low-luminosity-RGB cases; dwarfs and subgiants were
+essentially unchanged.
+
+The simulated RGB star has \(\Delta\nu \simeq 9.0\,\mu\mathrm{Hz}\). A
+perfectly periodic 2.5-day momentum-dump pattern creates a spectral-window
+comb spaced by \(4.63\,\mu\mathrm{Hz}\), close to \(\Delta\nu/2\). A targeted
+32-realization RGB sweep compared operationally relevant recurrence
+intervals. When gap durations were scaled so that every profile retained
+approximately the same 99.2% duty cycle, the result was:
+
+| Momentum-dump interval | Gap duration | Full-amplitude TPR | Mean oscillation probability |
+| --- | ---: | ---: | ---: |
+| 2.5 days | 30 min | 71.9% | 0.675 |
+| 4.0 days | 48 min | 90.6% | 0.810 |
+| 6.75 days | 81 min | 96.9% | 0.887 |
+
+The median power integrated across the envelope FWHM remained within about
+1% of the continuous value. The failure therefore follows distortion of the
+spectral shape, not simple removal of envelope power. It is an exploratory
+subgroup result rather than a final mission-wide calibration: actual TESS
+momentum-dump cadence varies by sector, and later operations place dumps
+during contacts. See the official
+[TESS observations page](https://tess.mit.edu/observations/) and
+[Sector 2 data-release notes](https://tasoc.dk/docs/release_notes/tess_sector_02_drn02_v02.pdf).
+
+The saved reports used for these numbers are
+`notebooks/data/focused_window_study.json`,
+`notebooks/data/momentum_interval_sweep.json`, and
+`notebooks/data/momentum_interval_matched_duty.json`.
+The two interval reports can be reproduced with:
+
+```bash
+uv run python examples/focused_window_study.py \
+  --interval-sweep-only --repeats 8 --draws 256 \
+  --seed 2321 --output momentum-interval-sweep.json
+
+uv run python examples/focused_window_study.py \
+  --interval-sweep-only --match-interval-duty-cycle \
+  --repeats 8 --draws 256 --seed 2321 \
+  --output momentum-interval-matched-duty.json
+```
 
 Tutorial notebooks are in `notebooks/`. Install their dependencies with
 `uv sync --extra tutorial`, then start with

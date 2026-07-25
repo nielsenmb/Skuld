@@ -1,0 +1,297 @@
+{
+  "draws": 256,
+  "repeats": 8,
+  "seed": 2321,
+  "threshold": 0.45,
+  "matched_duty_cycle": true,
+  "continuous": {
+    "cases": 32,
+    "detections": 31,
+    "true_positive_rate": 0.96875,
+    "true_positive_rate_wilson_95": [
+      0.8425539219962727,
+      0.9944622826374491
+    ],
+    "mean_probability": 0.9157632084858347,
+    "median_probability": 0.998551846194975,
+    "mean_duty_cycle": 1.0,
+    "mean_gap_count": 0.0,
+    "mean_maximum_gap_hours": 0.0,
+    "mean_peak_sidelobe_power": 1.0290130461977047e-33
+  },
+  "intervals_days": {
+    "2.5": {
+      "profile": {
+        "cases": 32,
+        "detections": 23,
+        "true_positive_rate": 0.71875,
+        "true_positive_rate_wilson_95": [
+          0.546251630618882,
+          0.8443559315435214
+        ],
+        "mean_probability": 0.6753810083567174,
+        "median_probability": 0.7944802445672625,
+        "mean_duty_cycle": 0.9921473709110571,
+        "mean_gap_count": 22.5,
+        "mean_maximum_gap_hours": 0.5,
+        "mean_peak_sidelobe_power": 6.256747468307975e-05
+      },
+      "paired_vs_continuous": {
+        "pairs": 32,
+        "mean_probability_shift": -0.24038220012911723,
+        "median_probability_shift": -0.14208187593811317,
+        "mean_absolute_probability_shift": 0.25682780858963716,
+        "detections_lost": 9,
+        "detections_gained": 1,
+        "exact_paired_p_value": 0.021484375,
+        "median_envelope_power_ratio": 0.9997082584194085
+      },
+      "by_duration_days": {
+        "27.4": {
+          "cases": 16,
+          "detections": 10,
+          "true_positive_rate": 0.625,
+          "true_positive_rate_wilson_95": [
+            0.3864064709793481,
+            0.815190174452472
+          ],
+          "mean_probability": 0.6249110819617695,
+          "median_probability": 0.6240096399839614,
+          "mean_duty_cycle": 0.9923965936739659,
+          "mean_gap_count": 10.0,
+          "mean_maximum_gap_hours": 0.5,
+          "mean_peak_sidelobe_power": 5.843344105769293e-05
+        },
+        "90.0": {
+          "cases": 16,
+          "detections": 13,
+          "true_positive_rate": 0.8125,
+          "true_positive_rate_wilson_95": [
+            0.5699064013154177,
+            0.9340852122641324
+          ],
+          "mean_probability": 0.7258509347516653,
+          "median_probability": 0.8986947454213126,
+          "mean_duty_cycle": 0.9918981481481481,
+          "mean_gap_count": 35.0,
+          "mean_maximum_gap_hours": 0.5,
+          "mean_peak_sidelobe_power": 6.670150830846658e-05
+        }
+      },
+      "by_white_noise": {
+        "2.0": {
+          "cases": 16,
+          "detections": 11,
+          "true_positive_rate": 0.6875,
+          "true_positive_rate_wilson_95": [
+            0.4440393186673406,
+            0.8583556494803894
+          ],
+          "mean_probability": 0.6986564311149859,
+          "median_probability": 0.9471208136689827,
+          "mean_duty_cycle": 0.9921473709110571,
+          "mean_gap_count": 22.5,
+          "mean_maximum_gap_hours": 0.5,
+          "mean_peak_sidelobe_power": 6.256747468307976e-05
+        },
+        "8.0": {
+          "cases": 16,
+          "detections": 12,
+          "true_positive_rate": 0.75,
+          "true_positive_rate_wilson_95": [
+            0.5050123107060135,
+            0.8981809801576265
+          ],
+          "mean_probability": 0.6521055855984489,
+          "median_probability": 0.7321357847352727,
+          "mean_duty_cycle": 0.9921473709110571,
+          "mean_gap_count": 22.5,
+          "mean_maximum_gap_hours": 0.5,
+          "mean_peak_sidelobe_power": 6.256747468307976e-05
+        }
+      }
+    },
+    "4.0": {
+      "profile": {
+        "cases": 32,
+        "detections": 29,
+        "true_positive_rate": 0.90625,
+        "true_positive_rate_wilson_95": [
+          0.7578150066422116,
+          0.9675990373736805
+        ],
+        "mean_probability": 0.8099358760895818,
+        "median_probability": 0.927669557726112,
+        "mean_duty_cycle": 0.9922762908894296,
+        "mean_gap_count": 14.0,
+        "mean_maximum_gap_hours": 0.8,
+        "mean_peak_sidelobe_power": 6.028094188253325e-05
+      },
+      "paired_vs_continuous": {
+        "pairs": 32,
+        "mean_probability_shift": -0.10582733239625275,
+        "median_probability_shift": -0.018984434370889258,
+        "mean_absolute_probability_shift": 0.14711999744530302,
+        "detections_lost": 3,
+        "detections_gained": 1,
+        "exact_paired_p_value": 0.625,
+        "median_envelope_power_ratio": 1.0072979132436286
+      },
+      "by_duration_days": {
+        "27.4": {
+          "cases": 16,
+          "detections": 15,
+          "true_positive_rate": 0.9375,
+          "true_positive_rate_wilson_95": [
+            0.7167073163197013,
+            0.9888809426916687
+          ],
+          "mean_probability": 0.7890265605499602,
+          "median_probability": 0.8969783288770216,
+          "mean_duty_cycle": 0.9927007299270073,
+          "mean_gap_count": 6.0,
+          "mean_maximum_gap_hours": 0.8,
+          "mean_peak_sidelobe_power": 5.313579188145992e-05
+        },
+        "90.0": {
+          "cases": 16,
+          "detections": 14,
+          "true_positive_rate": 0.875,
+          "true_positive_rate_wilson_95": [
+            0.6397666856325173,
+            0.9650232506629428
+          ],
+          "mean_probability": 0.8308451916292037,
+          "median_probability": 0.9760986929311105,
+          "mean_duty_cycle": 0.9918518518518519,
+          "mean_gap_count": 22.0,
+          "mean_maximum_gap_hours": 0.8,
+          "mean_peak_sidelobe_power": 6.742609188360659e-05
+        }
+      },
+      "by_white_noise": {
+        "2.0": {
+          "cases": 16,
+          "detections": 14,
+          "true_positive_rate": 0.875,
+          "true_positive_rate_wilson_95": [
+            0.6397666856325173,
+            0.9650232506629428
+          ],
+          "mean_probability": 0.8163861352663445,
+          "median_probability": 0.9389556763183148,
+          "mean_duty_cycle": 0.9922762908894296,
+          "mean_gap_count": 14.0,
+          "mean_maximum_gap_hours": 0.8,
+          "mean_peak_sidelobe_power": 6.0280941882533256e-05
+        },
+        "8.0": {
+          "cases": 16,
+          "detections": 15,
+          "true_positive_rate": 0.9375,
+          "true_positive_rate_wilson_95": [
+            0.7167073163197013,
+            0.9888809426916687
+          ],
+          "mean_probability": 0.8034856169128193,
+          "median_probability": 0.9026661254408505,
+          "mean_duty_cycle": 0.9922762908894296,
+          "mean_gap_count": 14.0,
+          "mean_maximum_gap_hours": 0.8,
+          "mean_peak_sidelobe_power": 6.0280941882533256e-05
+        }
+      }
+    },
+    "6.75": {
+      "profile": {
+        "cases": 32,
+        "detections": 31,
+        "true_positive_rate": 0.96875,
+        "true_positive_rate_wilson_95": [
+          0.8425539219962727,
+          0.9944622826374491
+        ],
+        "mean_probability": 0.8873986717182349,
+        "median_probability": 0.978695375498603,
+        "mean_duty_cycle": 0.991730816887447,
+        "mean_gap_count": 8.5,
+        "mean_maximum_gap_hours": 1.3666666666666667,
+        "mean_peak_sidelobe_power": 6.907819859535474e-05
+      },
+      "paired_vs_continuous": {
+        "pairs": 32,
+        "mean_probability_shift": -0.028364536767599632,
+        "median_probability_shift": -0.0001184879388947957,
+        "mean_absolute_probability_shift": 0.08052457823808634,
+        "detections_lost": 1,
+        "detections_gained": 1,
+        "exact_paired_p_value": 1.0,
+        "median_envelope_power_ratio": 1.0041283107909407
+      },
+      "by_duration_days": {
+        "27.4": {
+          "cases": 16,
+          "detections": 16,
+          "true_positive_rate": 1.0,
+          "true_positive_rate_wilson_95": [
+            0.8063865817272802,
+            1.0
+          ],
+          "mean_probability": 0.8621410204326767,
+          "median_probability": 0.8999358582443249,
+          "mean_duty_cycle": 0.9916869424168694,
+          "mean_gap_count": 4.0,
+          "mean_maximum_gap_hours": 1.3666666666666667,
+          "mean_peak_sidelobe_power": 6.951856676294938e-05
+        },
+        "90.0": {
+          "cases": 16,
+          "detections": 15,
+          "true_positive_rate": 0.9375,
+          "true_positive_rate_wilson_95": [
+            0.7167073163197013,
+            0.9888809426916687
+          ],
+          "mean_probability": 0.9126563230037934,
+          "median_probability": 0.9979859218301408,
+          "mean_duty_cycle": 0.9917746913580247,
+          "mean_gap_count": 13.0,
+          "mean_maximum_gap_hours": 1.3666666666666667,
+          "mean_peak_sidelobe_power": 6.863783042776011e-05
+        }
+      },
+      "by_white_noise": {
+        "2.0": {
+          "cases": 16,
+          "detections": 15,
+          "true_positive_rate": 0.9375,
+          "true_positive_rate_wilson_95": [
+            0.7167073163197013,
+            0.9888809426916687
+          ],
+          "mean_probability": 0.8690251155994387,
+          "median_probability": 0.9755240425073888,
+          "mean_duty_cycle": 0.991730816887447,
+          "mean_gap_count": 8.5,
+          "mean_maximum_gap_hours": 1.3666666666666667,
+          "mean_peak_sidelobe_power": 6.907819859535474e-05
+        },
+        "8.0": {
+          "cases": 16,
+          "detections": 16,
+          "true_positive_rate": 1.0,
+          "true_positive_rate_wilson_95": [
+            0.8063865817272802,
+            1.0
+          ],
+          "mean_probability": 0.9057722278370313,
+          "median_probability": 0.978695375498603,
+          "mean_duty_cycle": 0.991730816887447,
+          "mean_gap_count": 8.5,
+          "mean_maximum_gap_hours": 1.3666666666666667,
+          "mean_peak_sidelobe_power": 6.907819859535474e-05
+        }
+      }
+    }
+  }
+}
