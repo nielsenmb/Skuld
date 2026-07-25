@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import product
 from types import MappingProxyType
 from typing import Any, Callable, Iterable, Mapping, Sequence
@@ -792,6 +792,47 @@ def summarize_recoveries(recoveries: Iterable[Recovery]) -> CalibrationResult:
         accuracy=float(np.trace(confusion) / np.sum(confusion)),
         multiclass_brier_score=float(np.mean(squared_errors)),
     )
+
+
+def reweight_calibration_models(
+    calibration: CalibrationResult,
+    model_probabilities: Mapping[str, float],
+) -> CalibrationResult:
+    """Recombine completed recoveries under alternative model priors.
+
+    The likelihood and evidence calculations are unchanged. This is intended
+    for paired sensitivity studies of model sets or prior odds, where every
+    alternative must use exactly the same spectra and evidence estimates.
+
+    Parameters
+    ----------
+    calibration
+        Completed injection-recovery experiment.
+    model_probabilities
+        Prior probabilities passed to
+        :meth:`~asterodetect.marginal.MarginalEvaluation.reweight`.
+
+    Returns
+    -------
+    CalibrationResult
+        Recomputed probabilities and calibration summaries.
+    """
+
+    if not isinstance(calibration, CalibrationResult):
+        raise TypeError("calibration must be a CalibrationResult")
+    recoveries = tuple(
+        Recovery(
+            recovery.case,
+            replace(
+                recovery.result,
+                evaluation=recovery.result.evaluation.reweight(
+                    model_probabilities
+                ),
+            ),
+        )
+        for recovery in calibration.recoveries
+    )
+    return summarize_recoveries(recoveries)
 
 
 def probability_reliability(

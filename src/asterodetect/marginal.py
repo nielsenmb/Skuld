@@ -56,6 +56,68 @@ class MarginalEvaluation:
     responsibilities: Mapping[str, float]
     diagnostics: Mapping[str, MonteCarloDiagnostic]
 
+    def reweight(
+        self,
+        model_probabilities: Mapping[str, float],
+    ) -> "MarginalEvaluation":
+        """Recombine existing evidences under alternative model priors.
+
+        This diagnostic does not repeat any likelihood calculations. Models
+        omitted from ``model_probabilities`` receive posterior probability
+        zero, while retained models are normalized using the supplied priors.
+
+        Parameters
+        ----------
+        model_probabilities
+            Prior probabilities for at least two models present in
+            :attr:`log_evidences`. Values must be positive and sum to one.
+
+        Returns
+        -------
+        MarginalEvaluation
+            The same evidences and diagnostics with recomputed model
+            probabilities.
+        """
+
+        supplied = dict(model_probabilities)
+        if len(supplied) < 2:
+            raise ValueError("model_probabilities must retain at least two models")
+        unknown = set(supplied) - set(self.log_evidences)
+        if unknown:
+            raise ValueError(
+                "model_probabilities contains models without evidences: "
+                f"{sorted(unknown)}"
+            )
+        priors = np.asarray(list(supplied.values()), dtype=float)
+        if (
+            np.any(priors <= 0)
+            or not np.all(np.isfinite(priors))
+            or not np.isclose(priors.sum(), 1.0)
+        ):
+            raise ValueError("model probabilities must be positive and sum to one")
+
+        labels = tuple(self.log_evidences)
+        joint = np.full(len(labels), -np.inf)
+        for index, label in enumerate(labels):
+            if label in supplied:
+                joint[index] = (
+                    self.log_evidences[label] + np.log(supplied[label])
+                )
+        total = logsumexp(joint)
+        responsibilities = {
+            label: float(probability)
+            for label, probability in zip(
+                labels,
+                np.exp(joint - total),
+                strict=True,
+            )
+        }
+        return MarginalEvaluation(
+            self.log_evidences,
+            MappingProxyType(responsibilities),
+            self.diagnostics,
+        )
+
 
 def _log_evidence(log_likelihoods: NDArray[np.float64]) -> tuple[float, MonteCarloDiagnostic]:
     """Estimate log evidence and Monte Carlo diagnostics from prior draws."""

@@ -1,0 +1,104 @@
+{
+  "description": "Held-out results from the standard 480-spectrum paired observing-window campaign and the paired model-set diagnostic.",
+  "campaign": {
+    "profile": "standard",
+    "draws": 256,
+    "repeats": 4,
+    "seed": 123,
+    "total_spectra": 480,
+    "validation_spectra_per_window": 120,
+    "validation_positive_per_window": 72,
+    "validation_negative_per_window": 48,
+    "positive_per_amplitude_per_window": 24,
+    "stellar_regimes": [
+      "dwarf",
+      "subgiant",
+      "low_luminosity_rgb"
+    ],
+    "durations_days": [
+      27.4,
+      90.0
+    ],
+    "amplitude_scales": [
+      0.3,
+      0.5,
+      1.0
+    ],
+    "selected_threshold": 0.45,
+    "maximum_tuning_false_positive_rate": 0.05
+  },
+  "three_model_validation": {
+    "continuous": {
+      "true_positives": 35,
+      "false_negatives": 37,
+      "false_positives": 2,
+      "true_negatives": 46,
+      "true_positive_rate": 0.4861111111111111,
+      "false_positive_rate": 0.041666666666666664,
+      "true_positive_by_amplitude": {
+        "0.3": 3,
+        "0.5": 9,
+        "1.0": 23
+      },
+      "true_positive_rate_by_amplitude": {
+        "0.3": 0.125,
+        "0.5": 0.375,
+        "1.0": 0.9583333333333334
+      }
+    },
+    "tess-like": {
+      "true_positives": 28,
+      "false_negatives": 44,
+      "false_positives": 2,
+      "true_negatives": 46,
+      "true_positive_rate": 0.3888888888888889,
+      "false_positive_rate": 0.041666666666666664,
+      "true_positive_by_amplitude": {
+        "0.3": 4,
+        "0.5": 5,
+        "1.0": 19
+      },
+      "true_positive_rate_by_amplitude": {
+        "0.3": 0.16666666666666666,
+        "0.5": 0.20833333333333334,
+        "1.0": 0.7916666666666666
+      }
+    },
+    "paired_probability_change": {
+      "detections_lost": 13,
+      "detections_gained": 6,
+      "mean_absolute_probability_shift": 0.125
+    },
+    "false_negatives_across_both_windows": {
+      "count": 81,
+      "largest_competitor": {
+        "noise": 0,
+        "granulation": 81
+      },
+      "median_probabilities": {
+        "noise": 0.0,
+        "granulation": 0.9549517157086364,
+        "oscillation": 0.04504828429138827
+      }
+    }
+  },
+  "noise_oscillation_validation": {
+    "false_positive_constraint_satisfied": false,
+    "continuous": {
+      "true_positive_rate": 1.0,
+      "false_positive_rate": 0.5,
+      "false_positives_by_truth": {
+        "noise": 0,
+        "granulation": 24
+      }
+    },
+    "tess-like": {
+      "true_positive_rate": 1.0,
+      "false_positive_rate": 0.5,
+      "false_positives_by_truth": {
+        "noise": 0,
+        "granulation": 24
+      }
+    }
+  }
+}
