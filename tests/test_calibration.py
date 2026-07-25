@@ -5,7 +5,8 @@ from asterodetect import (
     AsteroScaleSamples, Detector, InjectionCase, NuisancePrior,
     PowerSpectrum, Recovery, build_detection_study, build_injection_grid,
     build_regime_detection_study, evaluate_injections,
-    probability_reliability, summarize_recoveries, threshold_curve,
+    probability_reliability, select_detection_threshold, split_calibration,
+    summarize_recoveries, threshold_curve,
 )
 from asterodetect.detector import DetectionResult
 from asterodetect.marginal import MarginalEvaluation
@@ -223,3 +224,74 @@ def test_regime_detection_study_requires_matching_labels():
             {"dwarf": lambda *args: None},
             {"giant": {"white_noise": [1.0]}},
         )
+
+
+def test_calibration_split_stratifies_grid_cells_reproducibly():
+    recoveries = []
+    for truth in ("noise", "oscillation"):
+        probability = 0.1 if truth == "noise" else 0.7
+        for amplitude in (0.3, 1.0):
+            for repeat in range(4):
+                recovery = _recovery(
+                    f"{truth}-{amplitude}-{repeat}",
+                    truth,
+                    probability,
+                )
+                case = InjectionCase(
+                    recovery.case.name,
+                    recovery.case.truth,
+                    recovery.case.spectrum,
+                    recovery.case.stellar_constraints,
+                    metadata={
+                        "amplitude_scale": amplitude,
+                        "repeat": repeat,
+                    },
+                )
+                recoveries.append(Recovery(case, recovery.result))
+    calibration = summarize_recoveries(recoveries)
+    first = split_calibration(
+        calibration,
+        validation_fraction=0.5,
+        stratify_by=("truth", "amplitude_scale"),
+        seed=7,
+    )
+    second = split_calibration(
+        calibration,
+        validation_fraction=0.5,
+        stratify_by=("truth", "amplitude_scale"),
+        seed=7,
+    )
+    assert len(first.tuning.recoveries) == 8
+    assert len(first.validation.recoveries) == 8
+    assert [item.case.name for item in first.validation.recoveries] == [
+        item.case.name for item in second.validation.recoveries
+    ]
+    for population in (first.tuning, first.validation):
+        groups = population.group_by("amplitude_scale")
+        assert all(len(group.recoveries) == 4 for group in groups.values())
+
+
+def test_calibration_split_requires_independent_repeats_per_stratum():
+    calibration = summarize_recoveries([_recovery("only", "noise", 0.1)])
+    with pytest.raises(ValueError, match="at least two"):
+        split_calibration(calibration)
+
+
+def test_select_threshold_maximizes_completeness_under_false_positive_limit():
+    calibration = summarize_recoveries(
+        [
+            _recovery("o1", "oscillation", 0.8),
+            _recovery("o2", "oscillation", 0.35),
+            _recovery("n1", "noise", 0.4),
+            _recovery("n2", "granulation", 0.1),
+        ]
+    )
+    selected = select_detection_threshold(
+        calibration,
+        [0.3, 0.4, 0.5, 0.9],
+        maximum_false_positive_rate=0.0,
+        probability_bins=2,
+    )
+    assert selected.threshold == 0.5
+    assert selected.completeness == 0.5
+    assert selected.false_positive_rate == 0.0

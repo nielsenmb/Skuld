@@ -126,6 +126,22 @@ class DetectionMetrics:
 
 
 @dataclass(frozen=True, slots=True)
+class CalibrationSplit:
+    """Independent tuning and validation calibration populations.
+
+    Attributes
+    ----------
+    tuning
+        Recoveries available for selecting a decision threshold.
+    validation
+        Recoveries reserved for the final performance estimate.
+    """
+
+    tuning: "CalibrationResult"
+    validation: "CalibrationResult"
+
+
+@dataclass(frozen=True, slots=True)
 class CalibrationResult:
     """Aggregate results of an injection-recovery experiment.
 
@@ -271,6 +287,168 @@ class CalibrationResult:
             value: summarize_recoveries(group)
             for value, group in groups.items()
         }
+
+
+def split_calibration(
+    calibration: CalibrationResult,
+    *,
+    validation_fraction: float = 0.5,
+    stratify_by: Sequence[str] = ("truth",),
+    seed: int | None = None,
+) -> CalibrationSplit:
+    """Split recoveries into reproducible tuning and validation populations.
+
+    The split is performed independently within every requested stratum.
+    ``"truth"`` refers to the generating class; other names are read from
+    injection metadata. Including all injection-grid coordinates except
+    ``"repeat"`` places independent realizations of every grid cell in both
+    populations and prevents threshold selection from seeing validation
+    spectra.
+
+    Parameters
+    ----------
+    calibration
+        Completed injection-recovery experiment.
+    validation_fraction
+        Fraction of each stratum reserved for validation.
+    stratify_by
+        Generating-class or metadata fields defining the strata.
+    seed
+        Random seed controlling assignment within each stratum.
+
+    Returns
+    -------
+    CalibrationSplit
+        Independently summarized tuning and validation recoveries.
+
+    Raises
+    ------
+    ValueError
+        If a requested field is absent, a stratum has fewer than two
+        recoveries, or the fraction cannot leave both partitions populated.
+    """
+
+    fraction = float(validation_fraction)
+    if not np.isfinite(fraction) or not 0 < fraction < 1:
+        raise ValueError("validation_fraction must be finite and in (0, 1)")
+    fields = tuple(stratify_by)
+    if not fields:
+        raise ValueError("stratify_by must contain at least one field")
+
+    groups: dict[tuple[Any, ...], list[Recovery]] = {}
+    for recovery in calibration.recoveries:
+        values = []
+        for field in fields:
+            if field == "truth":
+                values.append(recovery.case.truth)
+                continue
+            metadata = recovery.case.metadata
+            if metadata is None or field not in metadata:
+                raise ValueError(
+                    f"recovery {recovery.case.name!r} lacks stratification "
+                    f"field {field!r}"
+                )
+            values.append(metadata[field])
+        groups.setdefault(tuple(values), []).append(recovery)
+
+    rng = np.random.default_rng(seed)
+    tuning: list[Recovery] = []
+    validation: list[Recovery] = []
+    for key, recoveries in groups.items():
+        if len(recoveries) < 2:
+            raise ValueError(
+                f"stratum {key!r} needs at least two independent recoveries"
+            )
+        validation_count = int(np.rint(fraction * len(recoveries)))
+        validation_count = min(max(validation_count, 1), len(recoveries) - 1)
+        order = rng.permutation(len(recoveries))
+        validation_indices = set(order[:validation_count])
+        for index, recovery in enumerate(recoveries):
+            if index in validation_indices:
+                validation.append(recovery)
+            else:
+                tuning.append(recovery)
+
+    return CalibrationSplit(
+        tuning=summarize_recoveries(tuning),
+        validation=summarize_recoveries(validation),
+    )
+
+
+def select_detection_threshold(
+    calibration: CalibrationResult,
+    thresholds: Iterable[float],
+    *,
+    maximum_false_positive_rate: float = 0.05,
+    probability_bins: int | Sequence[float] = 10,
+) -> DetectionMetrics:
+    """Choose the most complete threshold satisfying a false-positive limit.
+
+    Threshold selection should be applied only to a tuning population. Among
+    feasible thresholds, ties in completeness are resolved by lower
+    false-positive rate and then by the higher threshold. This deterministic
+    rule avoids silently tuning against a separate validation population.
+
+    Parameters
+    ----------
+    calibration
+        Tuning injection-recovery result.
+    thresholds
+        Candidate oscillation-probability thresholds.
+    maximum_false_positive_rate
+        Largest acceptable false-positive rate on the tuning population.
+    probability_bins
+        Reliability-bin definition forwarded to
+        :meth:`CalibrationResult.detection_metrics`.
+
+    Returns
+    -------
+    DetectionMetrics
+        Metrics at the selected threshold.
+
+    Raises
+    ------
+    ValueError
+        If the limit is invalid, no thresholds are supplied, or no candidate
+        satisfies the requested false-positive rate.
+    """
+
+    limit = float(maximum_false_positive_rate)
+    if not np.isfinite(limit) or not 0 <= limit <= 1:
+        raise ValueError(
+            "maximum_false_positive_rate must be finite and between zero and one"
+        )
+    candidates = tuple(
+        calibration.detection_metrics(
+            threshold=threshold,
+            probability_bins=probability_bins,
+        )
+        for threshold in thresholds
+    )
+    if not candidates:
+        raise ValueError("at least one threshold is required")
+    feasible = tuple(
+        item
+        for item in candidates
+        if np.isfinite(item.false_positive_rate)
+        and item.false_positive_rate <= limit
+    )
+    if not feasible:
+        raise ValueError("no threshold satisfies maximum_false_positive_rate")
+
+    def score(metrics: DetectionMetrics) -> tuple[float, float, float]:
+        """Return the deterministic operating-point ranking."""
+
+        completeness = (
+            metrics.completeness if np.isfinite(metrics.completeness) else -np.inf
+        )
+        return (
+            completeness,
+            -metrics.false_positive_rate,
+            metrics.threshold,
+        )
+
+    return max(feasible, key=score)
 
 
 def build_injection_grid(
