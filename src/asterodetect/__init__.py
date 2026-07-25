@@ -25,7 +25,13 @@ from .observation import (
 )
 from .priors import JointPrior
 from .nuisance import NuisancePrior
-from .simulation import simulate_periodogram
+from .simulation import (
+    DEFAULT_MODE_VISIBILITIES,
+    AstrophysicalInjectionFactory,
+    lorentzian_mode_comb,
+    regular_frequency_grid,
+    simulate_periodogram,
+)
 
 __all__ = [
     "GaussianEnvelope",
@@ -47,11 +53,15 @@ __all__ = [
     "SpectralModel",
     "WholeSpectrumMixture",
     "DEFAULT_TOTAL_MODE_VISIBILITY",
+    "DEFAULT_MODE_VISIBILITIES",
+    "AstrophysicalInjectionFactory",
     "cadence_amplitude_response",
     "envelope_integrated_power",
     "granulation_component_amplitudes",
     "gamma_log_likelihood",
     "simulate_periodogram",
+    "lorentzian_mode_comb",
+    "regular_frequency_grid",
     "build_injection_grid",
     "evaluate_injections",
     "summarize_recoveries",

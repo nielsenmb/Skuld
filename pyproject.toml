@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=7", "pytest-cov>=4"]
+tutorial = ["jupyter>=1", "matplotlib>=3.7"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/asterodetect"]
@@ -29,9 +30,3 @@ allow-direct-references = true
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
-
-[dependency-groups]
-dev = [
-    "pytest>=7",
-    "pytest-cov>=4",
-]

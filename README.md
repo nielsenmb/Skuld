@@ -212,6 +212,43 @@ depending on loop order. Detector settings such as `dnu_scale` should be
 compared with separate detector runs over the same cases, because they change
 the inference rather than the injected population.
 
+### Astrophysical injections
+
+`AstrophysicalInjectionFactory` supplies a standard simulation policy. It
+uses a stochastic Lorentzian mode comb rather than the detector's smooth
+Gaussian envelope, so injection recovery tests unresolved mode structure
+instead of merely reproducing the inference model:
+
+```python
+from asterodetect import AstrophysicalInjectionFactory, build_injection_grid
+
+factory = AstrophysicalInjectionFactory(asteroscale_samples)
+cases = build_injection_grid(
+    {
+        "truth": ["noise", "granulation", "oscillation"],
+        "duration_days": [27.4, 365.0],
+        "cadence_seconds": [120.0],
+        "white_noise": [0.1, 1.0],
+        "amplitude_scale": [0.1, 0.3, 1.0],
+    },
+    factory,
+    repeats=20,
+    seed=123,
+)
+```
+
+The factory builds a regular Fourier grid, two normalized Kallinger
+super-Lorentzians, and approximate `l=0,1,2,3` ridges beneath a Gaussian
+power envelope. It applies dilution and the frequency-dependent integration
+response before drawing an exponential periodogram realization. Regular
+sampling is intentional in this first version; gaps and spectral windows
+belong in a later model-misspecification experiment.
+
+Tutorial notebooks are in `notebooks/`. Install their dependencies with
+`uv sync --extra tutorial`, then start with
+`01_models_and_binning.ipynb` and continue to
+`02_injection_recovery.ipynb`.
+
 ## Development install
 
 ```bash
