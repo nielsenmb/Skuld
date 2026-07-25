@@ -417,6 +417,75 @@ def build_detection_study(
     )
 
 
+def build_regime_detection_study(
+    factories: Mapping[
+        str,
+        Callable[[str, Mapping[str, Any], np.random.Generator], InjectionCase],
+    ],
+    axes_by_regime: Mapping[str, Mapping[str, Sequence[Any]]],
+    *,
+    oscillation_amplitudes: Sequence[float] = (0.1, 0.3, 1.0),
+    repeats: int = 20,
+    seed: int | None = None,
+) -> tuple[InjectionCase, ...]:
+    """Build one reproducible detection grid across stellar regimes.
+
+    Separate axes are accepted for each regime because an absolute white-noise
+    power density that is challenging for a dwarf need not be challenging for
+    a red giant. Each generated case gains a ``stellar_regime`` metadata field
+    and a regime-prefixed name.
+
+    Parameters
+    ----------
+    factories
+        Injection factories keyed by a unique stellar-regime label.
+    axes_by_regime
+        Detection-study axes keyed by the same regime labels.
+    oscillation_amplitudes
+        Relative oscillation amplitudes for positive cases.
+    repeats
+        Independent stochastic realizations per coordinate.
+    seed
+        Root random seed.
+
+    Returns
+    -------
+    tuple
+        Noise, granulation, and oscillation cases across all regimes.
+    """
+
+    if not factories:
+        raise ValueError("at least one stellar-regime factory is required")
+    if set(factories) != set(axes_by_regime):
+        raise ValueError(
+            "factories and axes_by_regime must contain identical regime labels"
+        )
+    regime_names = tuple(factories)
+    child_seeds = np.random.SeedSequence(seed).spawn(len(regime_names))
+    cases = []
+    for regime, child_seed in zip(regime_names, child_seeds, strict=True):
+        regime_cases = build_detection_study(
+            axes_by_regime[regime],
+            factories[regime],
+            oscillation_amplitudes=oscillation_amplitudes,
+            repeats=repeats,
+            seed=int(child_seed.generate_state(1, dtype=np.uint64)[0]),
+        )
+        for case in regime_cases:
+            metadata = dict(case.metadata or {})
+            metadata["stellar_regime"] = regime
+            cases.append(
+                InjectionCase(
+                    name=f"{regime}-{case.name}",
+                    truth=case.truth,
+                    spectrum=case.spectrum,
+                    stellar_constraints=case.stellar_constraints,
+                    metadata=MappingProxyType(metadata),
+                )
+            )
+    return tuple(cases)
+
+
 def summarize_recoveries(recoveries: Iterable[Recovery]) -> CalibrationResult:
     """Calculate classification and probability metrics for recoveries.
 

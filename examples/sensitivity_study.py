@@ -118,6 +118,9 @@ def run_study(repeats: int, seed: int) -> dict[str, object]:
                 "classification_accuracy_difference": (
                     item.classification_accuracy_difference
                 ),
+                "oscillation_probability_std_ratio": (
+                    item.oscillation_probability_std_ratio
+                ),
                 "minimum_median_ess_fraction_ratio": (
                     item.minimum_median_ess_fraction_ratio
                 ),

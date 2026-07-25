@@ -96,6 +96,8 @@ class EstimatorComparison:
         Mean absolute probability shift between estimators.
     classification_accuracy_difference
         Adaptive accuracy minus prior-sampling accuracy.
+    oscillation_probability_std_ratio
+        Adaptive-to-prior ratio for fixed-case repeat scatter.
     minimum_median_ess_fraction_ratio
         Adaptive-to-prior ratio for the worst median ESS fraction.
     maximum_median_log_evidence_standard_error_ratio
@@ -109,6 +111,7 @@ class EstimatorComparison:
     evaluations_per_estimator: int
     mean_absolute_oscillation_probability_difference: float
     classification_accuracy_difference: float
+    oscillation_probability_std_ratio: float
     minimum_median_ess_fraction_ratio: float
     maximum_median_log_evidence_standard_error_ratio: float
     minimum_truth_model_median_ess_fraction_ratio: float
@@ -268,6 +271,10 @@ class SensitivityStudy:
                     classification_accuracy_difference=(
                         adaptive.classification_accuracy
                         - prior.classification_accuracy
+                    ),
+                    oscillation_probability_std_ratio=_safe_ratio(
+                        adaptive.oscillation_probability_std,
+                        prior.oscillation_probability_std,
                     ),
                     minimum_median_ess_fraction_ratio=_safe_ratio(
                         adaptive.minimum_median_ess_fraction,

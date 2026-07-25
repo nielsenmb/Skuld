@@ -103,6 +103,7 @@ def test_sensitivity_study_compares_estimators_on_the_same_case():
     assert len(comparison) == 1
     assert comparison[0].evaluations_per_estimator == 1
     assert comparison[0].mean_absolute_oscillation_probability_difference >= 0
+    assert comparison[0].oscillation_probability_std_ratio >= 0
     assert comparison[0].minimum_median_ess_fraction_ratio >= 0
     assert comparison[0].maximum_median_log_evidence_standard_error_ratio >= 0
     assert comparison[0].minimum_truth_model_median_ess_fraction_ratio >= 0

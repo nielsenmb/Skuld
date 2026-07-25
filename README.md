@@ -255,6 +255,30 @@ This example is deliberately small. A scientific calibration needs many more
 independent realizations and should reserve a separate validation population
 for selecting the final probability threshold.
 
+For a larger multi-regime checkpoint, use
+`examples/astrophysical_campaign.py`. It constructs separate correlated
+AsteroScale sample clouds and appropriate absolute noise axes for dwarfs,
+subgiants, and low-luminosity red giants:
+
+```bash
+uv run python examples/astrophysical_campaign.py \
+    --profile checkpoint --repeats 2 --draws 512 \
+    --output astrophysical-campaign.json
+```
+
+The checkpoint profile spans 27.4- and 90-day baselines, two white-noise
+levels per regime, and oscillation amplitudes of 0.3 and 1.0 times the
+scaling-relation prediction. The `standard` profile additionally varies
+dilution and the injected granulation amplitude. Its JSON report includes
+overall metrics and breakdowns by regime, duration, amplitude, dilution, and
+granulation offset.
+
+Use `build_regime_detection_study` to construct the same pattern with real
+AsteroScale samples or different regime definitions. It accepts one injection
+factory and one grid-axis mapping per regime because equal absolute
+white-noise levels are generally not equally informative across the HR
+diagram.
+
 ### Evidence and binning sensitivity
 
 Before increasing the astrophysical grid, use `run_sensitivity_study` to check
@@ -288,10 +312,11 @@ is close to zero or one.
 
 When both estimators are requested, `estimator_comparisons()` reports the
 adaptive-to-prior ESS and evidence-error ratios for every draw-count/bin-width
-combination. It also reports the mean absolute change in oscillation
-probability and the change in classification accuracy. This makes it possible
-to check that improved ESS corresponds to stable scientific conclusions,
-rather than treating sampling efficiency alone as sufficient.
+combination. It also reports the adaptive-to-prior repeat-scatter ratio, the
+mean absolute change in oscillation probability, and the change in
+classification accuracy. This makes it possible to check that improved ESS
+corresponds to stable scientific conclusions, rather than treating sampling
+efficiency alone as sufficient.
 
 The runnable `examples/sensitivity_study.py` writes the same diagnostics to
 JSON. `notebooks/03_evidence_and_binning_sensitivity.ipynb` illustrates how to
