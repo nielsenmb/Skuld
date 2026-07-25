@@ -1,0 +1,265 @@
+{
+  "draws": 256,
+  "repeats": 4,
+  "seed": 411,
+  "threshold": 0.45,
+  "profiles": {
+    "continuous-current": {
+      "cases": 48,
+      "true_positives": 16,
+      "false_positives": 3,
+      "true_negatives": 29,
+      "false_negatives": 0,
+      "true_positive_rate": 1.0,
+      "false_positive_rate": 0.09375,
+      "binary_brier_score": 0.02582995102947158,
+      "median_model_probability": {
+        "noise": 0.0,
+        "granulation": 0.002219375635327332,
+        "oscillation": 0.017182206698145384
+      }
+    },
+    "gapped-current": {
+      "cases": 48,
+      "true_positives": 15,
+      "false_positives": 2,
+      "true_negatives": 30,
+      "false_negatives": 1,
+      "true_positive_rate": 0.9375,
+      "false_positive_rate": 0.0625,
+      "binary_brier_score": 0.051427288220376254,
+      "median_model_probability": {
+        "noise": 0.0,
+        "granulation": 0.08545077103537814,
+        "oscillation": 0.004481905048083448
+      }
+    },
+    "gapped-window-aware": {
+      "cases": 48,
+      "true_positives": 16,
+      "false_positives": 2,
+      "true_negatives": 30,
+      "false_negatives": 0,
+      "true_positive_rate": 1.0,
+      "false_positive_rate": 0.0625,
+      "binary_brier_score": 0.02471770698123539,
+      "median_model_probability": {
+        "noise": 0.0,
+        "granulation": 0.0005150142535885123,
+        "oscillation": 0.05506192741264239
+      }
+    }
+  },
+  "window_aware_minus_current_probability": {
+    "noise": {
+      "pairs": 16,
+      "mean_oscillation_probability_shift": -2.750874858229751e-191,
+      "median_oscillation_probability_shift": 0.0,
+      "mean_absolute_oscillation_probability_shift": 2.7511002939009842e-191
+    },
+    "granulation": {
+      "pairs": 16,
+      "mean_oscillation_probability_shift": 0.05238469817661073,
+      "median_oscillation_probability_shift": 0.025042418401781452,
+      "mean_absolute_oscillation_probability_shift": 0.1412631673047878
+    },
+    "oscillation": {
+      "pairs": 16,
+      "mean_oscillation_probability_shift": 0.14445432762664814,
+      "median_oscillation_probability_shift": 0.04193064114310785,
+      "mean_absolute_oscillation_probability_shift": 0.14915949360960742
+    }
+  },
+  "by_duration_days": {
+    "27.4": {
+      "continuous-current": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 3,
+        "true_negatives": 13,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.1875,
+        "binary_brier_score": 0.05130528667526985,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.013769611216318312,
+          "oscillation": 0.22162986956294925
+        }
+      },
+      "gapped-current": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 2,
+        "true_negatives": 14,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.125,
+        "binary_brier_score": 0.05892745062999649,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.1494704823457745,
+          "oscillation": 0.05556021524935158
+        }
+      },
+      "gapped-window-aware": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 2,
+        "true_negatives": 14,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.125,
+        "binary_brier_score": 0.04505402630292754,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.0034270968591549886,
+          "oscillation": 0.2867610523527378
+        }
+      }
+    },
+    "90.0": {
+      "continuous-current": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 0,
+        "true_negatives": 16,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.0,
+        "binary_brier_score": 0.0003546153836733064,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 3.674826435344763e-05,
+          "oscillation": 0.006442568546010949
+        }
+      },
+      "gapped-current": {
+        "cases": 24,
+        "true_positives": 7,
+        "false_positives": 0,
+        "true_negatives": 16,
+        "false_negatives": 1,
+        "true_positive_rate": 0.875,
+        "false_positive_rate": 0.0,
+        "binary_brier_score": 0.04392712581075602,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.02554457902295483,
+          "oscillation": 0.00033696903457190665
+        }
+      },
+      "gapped-window-aware": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 0,
+        "true_negatives": 16,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.0,
+        "binary_brier_score": 0.004381387659543254,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 5.0654776128124144e-05,
+          "oscillation": 0.005201081038674699
+        }
+      }
+    }
+  },
+  "by_white_noise": {
+    "2.0": {
+      "continuous-current": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 2,
+        "true_negatives": 14,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.125,
+        "binary_brier_score": 0.027861183476271697,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.002219375635327332,
+          "oscillation": 0.05381354874068518
+        }
+      },
+      "gapped-current": {
+        "cases": 24,
+        "true_positives": 7,
+        "false_positives": 1,
+        "true_negatives": 15,
+        "false_negatives": 1,
+        "true_positive_rate": 0.875,
+        "false_positive_rate": 0.0625,
+        "binary_brier_score": 0.07773991097236617,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.09924695992233845,
+          "oscillation": 0.004668215933452997
+        }
+      },
+      "gapped-window-aware": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 2,
+        "true_negatives": 14,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.125,
+        "binary_brier_score": 0.03773928141765725,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.00016277629262042822,
+          "oscillation": 0.2419464096576513
+        }
+      }
+    },
+    "8.0": {
+      "continuous-current": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 1,
+        "true_negatives": 15,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.0625,
+        "binary_brier_score": 0.023798718582671474,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.005601747630298695,
+          "oscillation": 0.010422561641375689
+        }
+      },
+      "gapped-current": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 1,
+        "true_negatives": 15,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.0625,
+        "binary_brier_score": 0.025114665468386355,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.07613047045661256,
+          "oscillation": 0.004481905048083448
+        }
+      },
+      "gapped-window-aware": {
+        "cases": 24,
+        "true_positives": 8,
+        "false_positives": 0,
+        "true_negatives": 16,
+        "false_negatives": 0,
+        "true_positive_rate": 1.0,
+        "false_positive_rate": 0.0,
+        "binary_brier_score": 0.01169613254481354,
+        "median_model_probability": {
+          "noise": 0.0,
+          "granulation": 0.0038634673309351567,
+          "oscillation": 0.022657868304800537
+        }
+      }
+    }
+  }
+}

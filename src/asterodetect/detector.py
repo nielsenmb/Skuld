@@ -15,6 +15,7 @@ from .data import PowerSpectrum
 from .marginal import MarginalEvaluation, PriorPredictiveMarginalizer
 from .nuisance import NuisancePrior
 from .observation import ObservationModel
+from .window import ObservingWindowLike, SpectralWindowOperator
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +36,8 @@ class DetectionResult:
         Nuisance values aligned with ``samples``.
     estimator
         Evidence estimator name.
+    spectral_window_applied
+        Whether predicted spectra were passed through an observing window.
     """
 
     evaluation: MarginalEvaluation
@@ -43,6 +46,7 @@ class DetectionResult:
     samples: AsteroScaleSamples
     nuisance_draws: Mapping[str, NDArray[np.float64]]
     estimator: str = "prior"
+    spectral_window_applied: bool = False
 
     @property
     def probabilities(self) -> Mapping[str, float]:
@@ -145,6 +149,9 @@ class Detector:
         *,
         rng: np.random.Generator | int | None = None,
         white_noise_centre: float | None = None,
+        observing_window: ObservingWindowLike | None = None,
+        window_row_batch_size: int = 32,
+        window_fft_workers: int = 1,
         solver: Any | None = None,
         **asteroscale_kwargs: Any,
     ) -> DetectionResult:
@@ -160,6 +167,15 @@ class Detector:
             Random generator or seed.
         white_noise_centre
             Optional positive centre for the white-noise prior.
+        observing_window
+            Optional regular time mask. When supplied, every predicted
+            complete spectrum is passed through its spectral window before
+            likelihood evaluation.
+        window_row_batch_size
+            Maximum number of full-resolution predicted spectra transformed
+            together when ``observing_window`` is supplied.
+        window_fft_workers
+            Worker count used for spectral-window FFTs.
         solver
             Optional preconfigured AsteroScale solver.
         **asteroscale_kwargs
@@ -188,6 +204,15 @@ class Detector:
             minimum_envelope_bins=self.minimum_envelope_bins,
         )
         binned = spectrum.bin_by_width(bin_width)
+        spectral_window = (
+            None
+            if observing_window is None
+            else SpectralWindowOperator.from_observing_window(
+                observing_window,
+                row_batch_size=window_row_batch_size,
+                fft_workers=window_fft_workers,
+            )
+        )
 
         if self.estimator == "adaptive":
             centre = (
@@ -209,6 +234,7 @@ class Detector:
                 self.nuisance_prior,
                 white_noise_centre=centre,
                 observation=self.observation,
+                spectral_window=spectral_window,
                 rng=generator,
             )
             return DetectionResult(
@@ -218,6 +244,7 @@ class Detector:
                 samples=adaptive.oscillation_samples,
                 nuisance_draws=adaptive.oscillation_nuisance_draws,
                 estimator="adaptive",
+                spectral_window_applied=spectral_window is not None,
             )
 
         resampled = AsteroScaleSamples(base.draw(self.draws, rng=generator))
@@ -243,6 +270,7 @@ class Detector:
                 "granulation_variance_fraction_low"
             ],
             overdispersion=nuisance["overdispersion"],
+            spectral_window=spectral_window,
         )
         return DetectionResult(
             evaluation=evaluation,
@@ -251,4 +279,5 @@ class Detector:
             samples=inference_samples,
             nuisance_draws=MappingProxyType(dict(nuisance)),
             estimator="prior",
+            spectral_window_applied=spectral_window is not None,
         )

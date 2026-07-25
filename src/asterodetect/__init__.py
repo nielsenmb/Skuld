@@ -65,6 +65,7 @@ from .sensitivity import (
     SensitivitySummary,
     run_sensitivity_study,
 )
+from .window import SpectralWindowOperator
 
 __all__ = [
     "GaussianEnvelope",
@@ -91,6 +92,7 @@ __all__ = [
     "ObservationModel",
     "PowerSpectrum",
     "SpectralModel",
+    "SpectralWindowOperator",
     "WholeSpectrumMixture",
     "DEFAULT_TOTAL_MODE_VISIBILITY",
     "DEFAULT_MODE_VISIBILITIES",

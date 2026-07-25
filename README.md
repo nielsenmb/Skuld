@@ -587,6 +587,72 @@ uv run python examples/focused_window_study.py \
   --output momentum-interval-matched-duty.json
 ```
 
+### Target-specific window-aware forward model
+
+When a target's regular-cadence time mask is available, `Detector.run` can
+pass every predicted complete spectrum through the corresponding spectral
+window before evaluating the likelihood:
+
+```python
+window = tess_observing_window(
+    90.0,
+    120.0,
+    profile="momentum-dumps",
+)
+result = detector.run(
+    spectrum,
+    stellar_constraints,
+    observing_window=window,
+)
+```
+
+`SpectralWindowOperator` performs the discrete two-sided convolution with
+\(|W(\nu)|^2\), using the same duty-cycle normalization as the time-domain
+simulator, then averages the result over the detector's fixed bins. Noise,
+granulation, and oscillation predictions all receive the same treatment.
+The ordinary detector path remains unchanged when no mask is supplied.
+
+The likelihood is still the independent-bin Gamma approximation. Window
+awareness therefore corrects the expected mean spectrum but does not claim
+that Fourier bins remain independent after gaps.
+
+`examples/window_aware_study.py` first checks full-amplitude, noisy
+low-luminosity-RGB stars with the problematic 30-minute/2.5-day gap pattern.
+In a 48-case study with 16 oscillators and 32 negative controls:
+
+| Evaluation | TPR | FPR | Binary Brier score |
+| --- | ---: | ---: | ---: |
+| Continuous, current model | 100.0% | 9.4% | 0.0258 |
+| Gapped, current model | 93.8% | 6.2% | 0.0514 |
+| Gapped, window-aware model | 100.0% | 6.2% | 0.0247 |
+
+The sample is deliberately small: one negative classification changes the
+FPR by 3.1 percentage points. It is a focused implementation check, not a new
+mission-wide threshold calibration. The important paired result is that
+window awareness recovered the lost oscillator without adding false
+positives relative to the same gapped spectra.
+
+Replaying PR #10's harder 32-oscillator RGB population gives:
+
+| Evaluation | Detections | TPR | Mean oscillation probability |
+| --- | ---: | ---: | ---: |
+| Continuous, current model | 31/32 | 96.9% | 0.916 |
+| Gapped, current model | 23/32 | 71.9% | 0.675 |
+| Gapped, window-aware model | 31/32 | 96.9% | 0.902 |
+
+The saved reports are `notebooks/data/window_aware_study.json` and
+`notebooks/data/window_aware_rgb_replay.json`. Reproduce them with:
+
+```bash
+uv run python examples/window_aware_study.py \
+  --repeats 4 --draws 256 --seed 411 \
+  --output window-aware-study.json
+
+uv run python examples/window_aware_study.py \
+  --oscillation-replay --repeats 8 --draws 256 --seed 2321 \
+  --output window-aware-rgb-replay.json
+```
+
 Tutorial notebooks are in `notebooks/`. Install their dependencies with
 `uv sync --extra tutorial`, then start with
 `01_models_and_binning.ipynb` and continue to
