@@ -78,3 +78,25 @@ def test_zero_amplitude_oscillation_case_contains_granulation_only():
     )
     assert case.truth == "oscillation"
     assert case.metadata["amplitude_scale"] == 0.0
+
+
+def test_factory_applies_tess_like_window_and_records_duty_cycle():
+    factory = AstrophysicalInjectionFactory(
+        _samples(),
+        duration_days=27.4,
+        cadence_seconds=600.0,
+    )
+    continuous = factory(
+        "continuous",
+        {"truth": "oscillation", "window_profile": "continuous"},
+        np.random.default_rng(8),
+    )
+    gapped = factory(
+        "gapped",
+        {"truth": "oscillation", "window_profile": "tess-like"},
+        np.random.default_rng(8),
+    )
+    assert continuous.metadata["duty_cycle"] == 1.0
+    assert gapped.metadata["window_profile"] == "tess-like"
+    assert gapped.metadata["duty_cycle"] < 1.0
+    assert not np.array_equal(continuous.spectrum.power, gapped.spectrum.power)

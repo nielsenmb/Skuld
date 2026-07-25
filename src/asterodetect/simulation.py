@@ -99,6 +99,256 @@ def regular_frequency_grid(
     return np.fft.rfftfreq(samples, cadence_seconds)[1:] * 1.0e6
 
 
+@dataclass(frozen=True, slots=True)
+class ObservingWindow:
+    """A regularly sampled observing window.
+
+    Parameters
+    ----------
+    observed
+        Boolean mask whose true entries are retained observations.
+    cadence_seconds
+        Time between adjacent samples.
+    label
+        Short description stored in injection metadata.
+    """
+
+    observed: NDArray[np.bool_]
+    cadence_seconds: float
+    label: str = "custom"
+
+    def __init__(
+        self,
+        observed: ArrayLike,
+        cadence_seconds: float,
+        label: str = "custom",
+    ) -> None:
+        """Validate and store an immutable observing window."""
+
+        mask = np.asarray(observed)
+        if mask.ndim != 1 or mask.size < 4:
+            raise ValueError(
+                "observed must be one-dimensional with at least four samples"
+            )
+        if mask.dtype.kind != "b":
+            raise TypeError("observed must contain boolean values")
+        if np.count_nonzero(mask) < 4:
+            raise ValueError("observing window must retain at least four samples")
+        cadence = _positive_parameter(cadence_seconds, "cadence_seconds")
+        label = str(label)
+        if not label:
+            raise ValueError("label must not be empty")
+        mask = mask.copy()
+        mask.setflags(write=False)
+        object.__setattr__(self, "observed", mask)
+        object.__setattr__(self, "cadence_seconds", cadence)
+        object.__setattr__(self, "label", label)
+
+    @property
+    def duty_cycle(self) -> float:
+        """Return the fraction of scheduled samples that are observed."""
+
+        return float(np.mean(self.observed))
+
+    @property
+    def duration_days(self) -> float:
+        """Return the scheduled baseline in days."""
+
+        return self.observed.size * self.cadence_seconds / 86400.0
+
+
+def continuous_observing_window(
+    duration_days: float,
+    cadence_seconds: float,
+) -> ObservingWindow:
+    """Construct an uninterrupted regular observing window.
+
+    Parameters
+    ----------
+    duration_days
+        Scheduled observing baseline.
+    cadence_seconds
+        Regular sampling cadence.
+
+    Returns
+    -------
+    ObservingWindow
+        All-true observing mask.
+    """
+
+    samples = _sample_count(duration_days, cadence_seconds)
+    return ObservingWindow(
+        np.ones(samples, dtype=bool),
+        cadence_seconds,
+        label="continuous",
+    )
+
+
+def tess_like_observing_window(
+    duration_days: float,
+    cadence_seconds: float,
+    *,
+    downlink_interval_days: float = 13.7,
+    downlink_duration_hours: float = 16.0,
+    momentum_dump_interval_days: float = 2.5,
+    momentum_dump_duration_minutes: float = 30.0,
+    random_loss_fraction: float = 0.005,
+    rng: np.random.Generator | int | None = None,
+) -> ObservingWindow:
+    """Construct a configurable TESS-like regular-cadence window.
+
+    The mask combines periodic long downlink gaps, shorter momentum-dump gaps,
+    and independent missing cadences. It is a controlled approximation for
+    model-misspecification studies rather than a reconstruction of a specific
+    target's quality flags.
+
+    Parameters
+    ----------
+    duration_days, cadence_seconds
+        Scheduled observing baseline and cadence.
+    downlink_interval_days, downlink_duration_hours
+        Spacing and duration of the longer periodic gaps.
+    momentum_dump_interval_days, momentum_dump_duration_minutes
+        Spacing and duration of shorter periodic interruptions.
+    random_loss_fraction
+        Independent probability that any otherwise observed cadence is lost.
+    rng
+        Random generator or seed controlling independent losses.
+
+    Returns
+    -------
+    ObservingWindow
+        Boolean observing mask labelled ``"tess-like"``.
+    """
+
+    samples = _sample_count(duration_days, cadence_seconds)
+    downlink_interval = _positive_parameter(
+        downlink_interval_days, "downlink_interval_days"
+    )
+    downlink_duration = _nonnegative_parameter(
+        downlink_duration_hours, "downlink_duration_hours"
+    ) / 24.0
+    dump_interval = _positive_parameter(
+        momentum_dump_interval_days, "momentum_dump_interval_days"
+    )
+    dump_duration = _nonnegative_parameter(
+        momentum_dump_duration_minutes, "momentum_dump_duration_minutes"
+    ) / 1440.0
+    loss = float(random_loss_fraction)
+    if not np.isfinite(loss) or not 0 <= loss < 1:
+        raise ValueError("random_loss_fraction must be finite and in [0, 1)")
+
+    time_days = np.arange(samples, dtype=float) * cadence_seconds / 86400.0
+    observed = np.ones(samples, dtype=bool)
+    _mask_periodic_gaps(
+        observed,
+        time_days,
+        interval_days=downlink_interval,
+        duration_days=downlink_duration,
+    )
+    _mask_periodic_gaps(
+        observed,
+        time_days,
+        interval_days=dump_interval,
+        duration_days=dump_duration,
+    )
+    if loss > 0:
+        observed &= _as_generator(rng).random(samples) >= loss
+    return ObservingWindow(observed, cadence_seconds, label="tess-like")
+
+
+def simulate_windowed_periodogram(
+    expected_power: ArrayLike,
+    window: ObservingWindow,
+    *,
+    rng: np.random.Generator | int | None = None,
+) -> NDArray[np.float64]:
+    """Simulate a stochastic light curve and apply an observing window.
+
+    A complex Gaussian Fourier realization is transformed to the time domain,
+    multiplied by the observing mask, and transformed back. Dividing by the
+    duty cycle preserves the mean white-noise power while gaps redistribute
+    coherent spectral power and introduce correlations between Fourier bins.
+
+    Parameters
+    ----------
+    expected_power
+        Positive one-sided power density on the positive real-FFT frequencies,
+        excluding zero frequency.
+    window
+        Regularly sampled observing mask.
+    rng
+        Random generator or seed.
+
+    Returns
+    -------
+    numpy.ndarray
+        Window-convolved positive-frequency periodogram.
+    """
+
+    if not isinstance(window, ObservingWindow):
+        raise TypeError("window must be an ObservingWindow")
+    expected = np.asarray(expected_power, dtype=float)
+    expected_size = np.fft.rfftfreq(
+        window.observed.size, window.cadence_seconds
+    )[1:].size
+    if expected.ndim != 1 or expected.size != expected_size:
+        raise ValueError(
+            "expected_power must match the positive frequencies of the window"
+        )
+    if not np.all(np.isfinite(expected)) or np.any(expected <= 0):
+        raise ValueError("expected_power must contain finite positive values")
+
+    generator = _as_generator(rng)
+    realized_power = generator.exponential(expected)
+    phase = generator.uniform(0.0, 2.0 * np.pi, expected.size)
+    coefficients = np.zeros(expected.size + 1, dtype=complex)
+    coefficients[1:] = np.sqrt(realized_power) * np.exp(1j * phase)
+    if window.observed.size % 2 == 0:
+        coefficients[-1] = (
+            np.sqrt(realized_power[-1])
+            * (1.0 if generator.random() >= 0.5 else -1.0)
+        )
+
+    light_curve = np.fft.irfft(coefficients, n=window.observed.size)
+    if np.any(window.observed):
+        light_curve = light_curve - np.mean(light_curve[window.observed])
+    windowed = np.where(window.observed, light_curve, 0.0)
+    transformed = np.fft.rfft(windowed)[1:]
+    power = np.abs(transformed) ** 2 / window.duty_cycle
+    return np.maximum(power, np.finfo(float).tiny)
+
+
+def _sample_count(duration_days: float, cadence_seconds: float) -> int:
+    """Validate an observing setup and return its number of samples."""
+
+    duration = _positive_parameter(duration_days, "duration_days")
+    cadence = _positive_parameter(cadence_seconds, "cadence_seconds")
+    samples = int(np.floor(duration * 86400.0 / cadence))
+    if samples < 4:
+        raise ValueError("duration and cadence must provide at least four samples")
+    return samples
+
+
+def _mask_periodic_gaps(
+    observed: NDArray[np.bool_],
+    time_days: NDArray[np.float64],
+    *,
+    interval_days: float,
+    duration_days: float,
+) -> None:
+    """Apply periodic gaps in place, beginning after one full interval."""
+
+    if duration_days == 0:
+        return
+    gap_start = interval_days
+    while gap_start < time_days[-1]:
+        observed[
+            (time_days >= gap_start) & (time_days < gap_start + duration_days)
+        ] = False
+        gap_start += interval_days
+
+
 def lorentzian_mode_comb(
     frequency: ArrayLike,
     *,
@@ -213,6 +463,10 @@ class AstrophysicalInjectionFactory:
         Optional fixed mode linewidth.
     bolometric_correction
         Granulation bolometric correction.
+    window_profile
+        ``"independent"`` for the original independent-bin simulation,
+        ``"continuous"`` for a time-domain uninterrupted simulation, or
+        ``"tess-like"`` for the configurable gapped approximation.
     """
 
     stellar_samples: AsteroScaleSamples
@@ -224,6 +478,7 @@ class AstrophysicalInjectionFactory:
     dilution: float = 1.0
     linewidth: float | None = None
     bolometric_correction: float = 1.0
+    window_profile: str = "independent"
 
     def __post_init__(self) -> None:
         """Validate the AsteroScale sample container."""
@@ -284,6 +539,13 @@ class AstrophysicalInjectionFactory:
             parameters.get("bolometric_correction", self.bolometric_correction),
             "bolometric_correction",
         )
+        window_profile = str(
+            parameters.get("window_profile", self.window_profile)
+        )
+        if window_profile not in {"independent", "continuous", "tess-like"}:
+            raise ValueError(
+                "window_profile must be independent, continuous, or tess-like"
+            )
 
         medians = {
             key: float(np.median(value))
@@ -339,7 +601,20 @@ class AstrophysicalInjectionFactory:
                 * response_squared
             )
 
-        power = rng.exponential(mean)
+        if window_profile == "independent":
+            power = rng.exponential(mean)
+            duty_cycle = 1.0
+        else:
+            if window_profile == "continuous":
+                window = continuous_observing_window(duration, cadence)
+            else:
+                window = tess_like_observing_window(
+                    duration,
+                    cadence,
+                    rng=parameters.get("window_seed", 0),
+                )
+            power = simulate_windowed_periodogram(mean, window, rng=rng)
+            duty_cycle = window.duty_cycle
         metadata = {
             "truth": truth,
             "duration_days": duration,
@@ -351,6 +626,8 @@ class AstrophysicalInjectionFactory:
             "linewidth": linewidth,
             "numax": medians["numax"],
             "dnu": medians["dnu"],
+            "window_profile": window_profile,
+            "duty_cycle": duty_cycle,
         }
         return InjectionCase(
             name=name,
