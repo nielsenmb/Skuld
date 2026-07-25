@@ -186,6 +186,32 @@ The injected parameters should deliberately differ from the inference-prior
 centre. Otherwise the exercise tests numerical self-consistency rather than
 detection calibration.
 
+Larger experiments can be constructed reproducibly with
+`build_injection_grid`. The simulation policy remains in a user-supplied
+factory, while the grid helper records every coordinate and repeat in the case
+metadata:
+
+```python
+from asterodetect import build_injection_grid
+
+axes = {
+    "white_noise": [0.1, 0.3, 1.0],
+    "amplitude_scale": [0.0, 0.3, 1.0],
+    "duration_days": [27.4, 365.0],
+}
+cases = build_injection_grid(axes, make_injection, repeats=20, seed=123)
+calibration = evaluate_injections(detector, cases, seed=456)
+
+by_amplitude = calibration.group_by("amplitude_scale")
+weak = calibration.subset(amplitude_scale=0.3, duration_days=27.4)
+```
+
+Here `make_injection(name, parameters, rng)` must return an `InjectionCase`.
+The independent generator supplied to each call prevents results from
+depending on loop order. Detector settings such as `dnu_scale` should be
+compared with separate detector runs over the same cases, because they change
+the inference rather than the injected population.
+
 ## Development install
 
 ```bash

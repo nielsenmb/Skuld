@@ -1,7 +1,14 @@
 """Bayesian power-excess detection for solar-like oscillations."""
 
 from .components import GaussianEnvelope, HarveyComponent
-from .calibration import CalibrationResult, InjectionCase, Recovery, evaluate_injections
+from .calibration import (
+    CalibrationResult,
+    InjectionCase,
+    Recovery,
+    build_injection_grid,
+    evaluate_injections,
+    summarize_recoveries,
+)
 from .asteroscale import AsteroScaleSamples
 from .data import PowerSpectrum
 from .detector import DetectionResult, Detector
@@ -45,7 +52,9 @@ __all__ = [
     "granulation_component_amplitudes",
     "gamma_log_likelihood",
     "simulate_periodogram",
+    "build_injection_grid",
     "evaluate_injections",
+    "summarize_recoveries",
 ]
 
 __version__ = "0.1.0"
