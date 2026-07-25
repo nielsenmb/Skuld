@@ -20,6 +20,11 @@ from .detector import DetectionResult, Detector
 from .likelihoods import gamma_log_likelihood
 from .mixture import MixtureEvaluation, WholeSpectrumMixture
 from .marginal import MarginalEvaluation, MonteCarloDiagnostic, PriorPredictiveMarginalizer
+from .importance import (
+    AdaptiveImportanceSampler,
+    ImportanceDiagnostic,
+    ImportanceResult,
+)
 from .models import SpectralModel
 from .observation import (
     DEFAULT_TOTAL_MODE_VISIBILITY,
