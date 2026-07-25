@@ -8,6 +8,7 @@ from typing import Mapping
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.stats import beta, norm
 
 from .data import PowerSpectrum
 
@@ -27,6 +28,14 @@ class NuisancePrior:
     granulation_split_concentration: float = 20.0
     overdispersion_log_scatter: float = 0.25
     high_frequency_fraction: float = 0.2
+
+    latent_names = (
+        "white_noise",
+        "envelope_scale",
+        "granulation_scale",
+        "granulation_variance_fraction_low",
+        "overdispersion",
+    )
 
     def __post_init__(self) -> None:
         for name in (
@@ -81,24 +90,58 @@ class NuisancePrior:
         if not np.isfinite(centre) or centre <= 0:
             raise ValueError("white_noise_centre must be finite and positive")
 
-        def lognormal(scatter: float) -> NDArray[np.float64]:
-            # Mean-one multiplier, so widening the prior does not move its mean.
-            return generator.lognormal(-0.5 * scatter**2, scatter, size)
-
-        alpha = 0.5 * self.granulation_split_concentration
-        draws = {
-            "white_noise": centre * lognormal(self.white_noise_log_scatter),
-            "envelope_scale": lognormal(self.envelope_log_scatter),
-            "granulation_scale": lognormal(self.granulation_log_scatter),
-            "granulation_variance_fraction_low": generator.beta(alpha, alpha, size),
-            "overdispersion": np.exp(
-                np.abs(
-                    generator.normal(
-                        0.0, self.overdispersion_log_scatter, size
-                    )
-                )
-            ),
-        }
+        latent = generator.normal(size=(size, len(self.latent_names)))
+        draws = dict(self.transform_latent(latent, white_noise_centre=centre))
         for values in draws.values():
             values.setflags(write=False)
         return MappingProxyType(draws)
+
+    def transform_latent(
+        self,
+        latent: NDArray[np.float64],
+        *,
+        white_noise_centre: float,
+    ) -> Mapping[str, NDArray[np.float64]]:
+        """Transform independent standard-Normal coordinates to nuisance values."""
+
+        values = np.asarray(latent, dtype=float)
+        if (
+            values.ndim != 2
+            or values.shape[1] != len(self.latent_names)
+            or not np.all(np.isfinite(values))
+        ):
+            raise ValueError(
+                f"latent must be finite with shape (n, {len(self.latent_names)})"
+            )
+        centre = float(white_noise_centre)
+        if not np.isfinite(centre) or centre <= 0:
+            raise ValueError("white_noise_centre must be finite and positive")
+
+        def lognormal(z: NDArray[np.float64], scatter: float) -> NDArray[np.float64]:
+            # Mean-one multiplier, so widening the prior does not move its mean.
+            return np.exp(-0.5 * scatter**2 + scatter * z)
+
+        alpha = 0.5 * self.granulation_split_concentration
+        probability = np.clip(
+            norm.cdf(values[:, 3]),
+            np.finfo(float).eps,
+            1 - np.finfo(float).eps,
+        )
+        return MappingProxyType(
+            {
+                "white_noise": centre
+                * lognormal(values[:, 0], self.white_noise_log_scatter),
+                "envelope_scale": lognormal(
+                    values[:, 1], self.envelope_log_scatter
+                ),
+                "granulation_scale": lognormal(
+                    values[:, 2], self.granulation_log_scatter
+                ),
+                "granulation_variance_fraction_low": beta.ppf(
+                    probability, alpha, alpha
+                ),
+                "overdispersion": np.exp(
+                    self.overdispersion_log_scatter * np.abs(values[:, 4])
+                ),
+            }
+        )

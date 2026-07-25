@@ -15,6 +15,7 @@ from .calibration import (
     threshold_curve,
 )
 from .asteroscale import AsteroScaleSamples
+from .adaptive import AdaptiveMarginalEvaluation, AdaptiveNuisanceMarginalizer
 from .data import PowerSpectrum
 from .detector import DetectionResult, Detector
 from .likelihoods import gamma_log_likelihood
@@ -58,6 +59,8 @@ __all__ = [
     "ProbabilityBin",
     "Recovery",
     "AsteroScaleSamples",
+    "AdaptiveMarginalEvaluation",
+    "AdaptiveNuisanceMarginalizer",
     "DetectionResult",
     "Detector",
     "JointPrior",
@@ -90,6 +93,9 @@ __all__ = [
     "probability_reliability",
     "summarize_recoveries",
     "threshold_curve",
+    "AdaptiveImportanceSampler",
+    "ImportanceDiagnostic",
+    "ImportanceResult",
 ]
 
 __version__ = "0.1.0"

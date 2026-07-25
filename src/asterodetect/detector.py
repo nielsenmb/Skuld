@@ -10,6 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .asteroscale import AsteroScaleSamples
+from .adaptive import AdaptiveNuisanceMarginalizer
 from .data import PowerSpectrum
 from .marginal import MarginalEvaluation, PriorPredictiveMarginalizer
 from .nuisance import NuisancePrior
@@ -25,6 +26,7 @@ class DetectionResult:
     bin_width: float
     samples: AsteroScaleSamples
     nuisance_draws: Mapping[str, NDArray[np.float64]]
+    estimator: str = "prior"
 
     @property
     def probabilities(self) -> Mapping[str, float]:
@@ -47,6 +49,9 @@ class Detector:
         model_probabilities: Mapping[str, float] | None = None,
         dnu_scale: float = 1.0,
         minimum_envelope_bins: int = 5,
+        estimator: str = "prior",
+        pilot_draws: int = 256,
+        defensive_fraction: float = 0.2,
     ) -> None:
         if isinstance(draws, bool) or not isinstance(draws, (int, np.integer)):
             raise TypeError("draws must be an integer")
@@ -58,6 +63,11 @@ class Detector:
         self.model_probabilities = model_probabilities
         self.dnu_scale = float(dnu_scale)
         self.minimum_envelope_bins = minimum_envelope_bins
+        if estimator not in {"prior", "adaptive"}:
+            raise ValueError("estimator must be 'prior' or 'adaptive'")
+        self.estimator = estimator
+        self.pilot_draws = pilot_draws
+        self.defensive_fraction = defensive_fraction
 
     def run(
         self,
@@ -89,6 +99,34 @@ class Detector:
         )
         binned = spectrum.bin_by_width(bin_width)
 
+        if self.estimator == "adaptive":
+            centre = (
+                self.nuisance_prior.estimate_white_noise(spectrum)
+                if white_noise_centre is None
+                else float(white_noise_centre)
+            )
+            adaptive = AdaptiveNuisanceMarginalizer(
+                draws=self.draws,
+                pilot_draws=self.pilot_draws,
+                defensive_fraction=self.defensive_fraction,
+                model_probabilities=self.model_probabilities,
+            ).evaluate(
+                binned,
+                base,
+                self.nuisance_prior,
+                white_noise_centre=centre,
+                observation=self.observation,
+                rng=generator,
+            )
+            return DetectionResult(
+                evaluation=adaptive.evaluation,
+                binned_spectrum=binned,
+                bin_width=bin_width,
+                samples=adaptive.oscillation_samples,
+                nuisance_draws=adaptive.oscillation_nuisance_draws,
+                estimator="adaptive",
+            )
+
         resampled = AsteroScaleSamples(base.draw(self.draws, rng=generator))
         nuisance = self.nuisance_prior.sample(
             spectrum,
@@ -119,4 +157,5 @@ class Detector:
             bin_width=bin_width,
             samples=inference_samples,
             nuisance_draws=MappingProxyType(dict(nuisance)),
+            estimator="prior",
         )

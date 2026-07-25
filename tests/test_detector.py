@@ -43,3 +43,29 @@ def test_nuisance_draws_are_valid_and_scatter_can_be_disabled():
     np.testing.assert_allclose(draws["overdispersion"], 1)
     split = draws["granulation_variance_fraction_low"]
     assert np.all((split > 0) & (split < 1))
+
+
+def test_adaptive_detector_is_reproducible_and_improves_noise_ess():
+    prior = NuisancePrior(white_noise_log_scatter=1.2)
+    plain = Detector(draws=256, nuisance_prior=prior).run(
+        _raw_spectrum(), _samples(), rng=42, white_noise_centre=0.1
+    )
+    detector = Detector(
+        draws=256,
+        pilot_draws=96,
+        estimator="adaptive",
+        nuisance_prior=prior,
+    )
+    first = detector.run(
+        _raw_spectrum(), _samples(), rng=42, white_noise_centre=0.1
+    )
+    second = detector.run(
+        _raw_spectrum(), _samples(), rng=42, white_noise_centre=0.1
+    )
+    assert first.estimator == "adaptive"
+    assert first.probabilities == second.probabilities
+    assert (
+        first.evaluation.diagnostics["noise"].effective_sample_size
+        > plain.evaluation.diagnostics["noise"].effective_sample_size
+    )
+    assert len(first.samples) == 256
