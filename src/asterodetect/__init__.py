@@ -2,6 +2,7 @@
 
 from .components import GaussianEnvelope, HarveyComponent
 from .calibration import (
+    CalibrationSplit,
     CalibrationResult,
     DetectionMetrics,
     InjectionCase,
@@ -12,6 +13,8 @@ from .calibration import (
     build_regime_detection_study,
     evaluate_injections,
     probability_reliability,
+    select_detection_threshold,
+    split_calibration,
     summarize_recoveries,
     threshold_curve,
 )
@@ -56,6 +59,7 @@ __all__ = [
     "GaussianEnvelope",
     "HarveyComponent",
     "CalibrationResult",
+    "CalibrationSplit",
     "DetectionMetrics",
     "InjectionCase",
     "ProbabilityBin",
@@ -95,6 +99,8 @@ __all__ = [
     "build_regime_detection_study",
     "evaluate_injections",
     "probability_reliability",
+    "select_detection_threshold",
+    "split_calibration",
     "summarize_recoveries",
     "threshold_curve",
     "AdaptiveImportanceSampler",

@@ -22,6 +22,8 @@ from asterodetect import (
     ObservationModel,
     build_regime_detection_study,
     evaluate_injections,
+    select_detection_threshold,
+    split_calibration,
 )
 from asterodetect.asteroscale import ASTERO_SCALE_PARAMETERS
 
@@ -58,6 +60,16 @@ REGIMES = {
         "white_noise": (2.0, 8.0),
     },
 }
+
+SPLIT_FIELDS = (
+    "truth",
+    "stellar_regime",
+    "duration_days",
+    "white_noise",
+    "amplitude_scale",
+    "dilution",
+    "granulation_scale",
+)
 
 
 def regime_samples(
@@ -146,22 +158,33 @@ def build_campaign(
         if profile == "standard":
             axes[name]["dilution"] = [0.7, 1.0]
             axes[name]["granulation_scale"] = [0.7, 1.3]
+    amplitudes = [0.3, 1.0]
+    if profile == "standard":
+        amplitudes = [0.3, 0.5, 1.0]
     return build_regime_detection_study(
         factories,
         axes,
-        oscillation_amplitudes=[0.3, 1.0],
+        oscillation_amplitudes=amplitudes,
         repeats=repeats,
         seed=seed + 10,
     )
 
 
-def _metrics(calibration: CalibrationResult) -> dict[str, Any]:
+def _metrics(
+    calibration: CalibrationResult,
+    *,
+    threshold: float = 0.5,
+) -> dict[str, Any]:
     """Return a JSON-safe detection summary."""
 
-    metrics = calibration.detection_metrics(threshold=0.5)
+    metrics = calibration.detection_metrics(threshold=threshold)
     return {
         "cases": len(calibration.recoveries),
+        "threshold": threshold,
         "accuracy": calibration.accuracy,
+        "binary_accuracy": (
+            metrics.true_positives + metrics.true_negatives
+        ) / len(calibration.recoveries),
         "multiclass_brier_score": calibration.multiclass_brier_score,
         "completeness": _finite_or_none(metrics.completeness),
         "false_positive_rate": _finite_or_none(metrics.false_positive_rate),
@@ -172,12 +195,15 @@ def _metrics(calibration: CalibrationResult) -> dict[str, Any]:
 
 
 def _group_metrics(
-    calibration: CalibrationResult, metadata_key: str
+    calibration: CalibrationResult,
+    metadata_key: str,
+    *,
+    threshold: float = 0.5,
 ) -> dict[str, dict[str, Any]]:
     """Summarize calibration separately for one metadata coordinate."""
 
     return {
-        str(value): _metrics(subset)
+        str(value): _metrics(subset, threshold=threshold)
         for value, subset in calibration.group_by(metadata_key).items()
     }
 
@@ -186,6 +212,8 @@ def _cross_group_metrics(
     calibration: CalibrationResult,
     first_key: str,
     second_key: str,
+    *,
+    threshold: float = 0.5,
 ) -> dict[str, dict[str, Any]]:
     """Summarize every populated pair of two metadata coordinates."""
 
@@ -193,7 +221,7 @@ def _cross_group_metrics(
     for first_value, first_subset in calibration.group_by(first_key).items():
         for second_value, subset in first_subset.group_by(second_key).items():
             label = f"{first_key}={first_value},{second_key}={second_value}"
-            result[label] = _metrics(subset)
+            result[label] = _metrics(subset, threshold=threshold)
     return result
 
 
@@ -209,6 +237,7 @@ def run_campaign(
     repeats: int,
     draws: int,
     seed: int,
+    maximum_false_positive_rate: float = 0.05,
 ) -> dict[str, Any]:
     """Run a multi-regime adaptive injection-recovery campaign.
 
@@ -222,6 +251,8 @@ def run_campaign(
         Final adaptive importance draws per model and case.
     seed
         Root random seed.
+    maximum_false_positive_rate
+        Tuning-population constraint used to select the decision threshold.
 
     Returns
     -------
@@ -237,16 +268,55 @@ def run_campaign(
         dnu_scale=1.0,
     )
     calibration = evaluate_injections(detector, cases, seed=seed + 20)
+    split = split_calibration(
+        calibration,
+        validation_fraction=0.5,
+        stratify_by=SPLIT_FIELDS,
+        seed=seed + 30,
+    )
+    selected = select_detection_threshold(
+        split.tuning,
+        np.linspace(0.05, 1.0, 20),
+        maximum_false_positive_rate=maximum_false_positive_rate,
+    )
+    threshold = selected.threshold
     return {
         "profile": profile,
         "estimator": "adaptive",
         "draws": draws,
         "repeats": repeats,
         "seed": seed,
+        "maximum_false_positive_rate": maximum_false_positive_rate,
         "overall": _metrics(calibration),
-        "by_stellar_regime": _group_metrics(
-            calibration, "stellar_regime"
+        "tuning": _metrics(split.tuning, threshold=threshold),
+        "validation": _metrics(split.validation, threshold=threshold),
+        "selected_threshold": threshold,
+        "validation_at_default_threshold": _metrics(split.validation),
+        "validation_at_default_by_amplitude_scale": _group_metrics(
+            split.validation, "amplitude_scale"
         ),
+        "validation_by_stellar_regime": _group_metrics(
+            split.validation, "stellar_regime", threshold=threshold
+        ),
+        "validation_by_duration_days": _group_metrics(
+            split.validation, "duration_days", threshold=threshold
+        ),
+        "validation_by_amplitude_scale": _group_metrics(
+            split.validation, "amplitude_scale", threshold=threshold
+        ),
+        "validation_by_regime_and_amplitude": _cross_group_metrics(
+            split.validation,
+            "stellar_regime",
+            "amplitude_scale",
+            threshold=threshold,
+        ),
+        "validation_by_dilution": _group_metrics(
+            split.validation, "dilution", threshold=threshold
+        ),
+        "validation_by_granulation_scale": _group_metrics(
+            split.validation, "granulation_scale", threshold=threshold
+        ),
+        "by_stellar_regime": _group_metrics(calibration, "stellar_regime"),
         "by_duration_days": _group_metrics(calibration, "duration_days"),
         "by_amplitude_scale": _group_metrics(
             calibration, "amplitude_scale"
@@ -271,6 +341,7 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--draws", type=int, default=512)
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--maximum-false-positive-rate", type=float, default=0.05)
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
     result = run_campaign(
@@ -278,6 +349,7 @@ def main() -> None:
         repeats=arguments.repeats,
         draws=arguments.draws,
         seed=arguments.seed,
+        maximum_false_positive_rate=arguments.maximum_false_positive_rate,
     )
     rendered = json.dumps(result, indent=2)
     if arguments.output is not None:

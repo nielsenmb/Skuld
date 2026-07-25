@@ -269,9 +269,28 @@ uv run python examples/astrophysical_campaign.py \
 The checkpoint profile spans 27.4- and 90-day baselines, two white-noise
 levels per regime, and oscillation amplitudes of 0.3 and 1.0 times the
 scaling-relation prediction. The `standard` profile additionally varies
-dilution and the injected granulation amplitude. Its JSON report includes
-overall metrics and breakdowns by regime, duration, amplitude, dilution, and
-granulation offset.
+dilution and the injected granulation amplitude, and inserts a 0.5-amplitude
+case to map the transition between weak and readily detectable oscillations.
+
+Every exact grid cell is divided by stochastic realization into independent
+tuning and validation populations. The tuning population chooses the most
+complete probability threshold whose false-positive rate is no larger than
+5% by default. That threshold is then applied unchanged to the validation
+population. The JSON report retains the fixed 0.5-threshold results and adds
+the selected threshold plus validation breakdowns by regime, duration,
+amplitude, dilution, and granulation offset:
+
+```bash
+uv run python examples/astrophysical_campaign.py \
+    --profile standard --repeats 4 --draws 512 \
+    --maximum-false-positive-rate 0.05 \
+    --output astrophysical-campaign-standard.json
+```
+
+At least two repeats are required for the split; four or more gives a less
+fragile estimate in each half. Threshold selection is analogous to choosing
+an instrument setting on calibration data before opening the sealed science
+sample: validation cases must not influence the operating point.
 
 Use `build_regime_detection_study` to construct the same pattern with real
 AsteroScale samples or different regime definitions. It accepts one injection
