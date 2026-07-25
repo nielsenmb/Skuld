@@ -272,13 +272,20 @@ scaling-relation prediction. The `standard` profile additionally varies
 dilution and the injected granulation amplitude, and inserts a 0.5-amplitude
 case to map the transition between weak and readily detectable oscillations.
 
-Every exact grid cell is divided by stochastic realization into independent
-tuning and validation populations. The tuning population chooses the most
-complete probability threshold whose false-positive rate is no larger than
-5% by default. That threshold is then applied unchanged to the validation
-population. The JSON report retains the fixed 0.5-threshold results and adds
-the selected threshold plus validation breakdowns by regime, duration,
-amplitude, dilution, and granulation offset:
+Every exact grid cell is divided by stochastic realization before inference
+into independent tuning and validation populations. On tuning cases, the
+campaign compares the original single-lognormal amplitude prior with several
+normal-plus-suppressed mixtures, and chooses an operating threshold under a
+5% false-positive constraint for each candidate. The candidate with the
+highest tuning completeness is selected, with Brier score and false-positive
+rate breaking ties. Only that frozen prior and threshold are then evaluated
+on validation cases.
+
+The mixture changes the nuisance distribution of oscillation amplitude
+relative to each intact AsteroScale row; it does not replace or decorrelate
+the AsteroScale sample cloud. The JSON report includes every candidate's
+tuning metrics, the selected hyperparameters, and validation breakdowns by
+regime, duration, amplitude, dilution, and granulation offset:
 
 ```bash
 uv run python examples/astrophysical_campaign.py \
@@ -288,9 +295,19 @@ uv run python examples/astrophysical_campaign.py \
 ```
 
 At least two repeats are required for the split; four or more gives a less
-fragile estimate in each half. Threshold selection is analogous to choosing
-an instrument setting on calibration data before opening the sealed science
-sample: validation cases must not influence the operating point.
+fragile estimate in each half. Prior and threshold selection are analogous to
+choosing an instrument configuration on calibration data before opening the
+sealed science sample: validation spectra are not evaluated until both
+choices have been frozen.
+
+In the initial 480-case standard study, the tuning population retained the
+original single-lognormal prior. Mixture candidates increased oscillation
+probabilities for some negative cases as well as suppressed oscillators, so
+the false-positive constraint forced higher thresholds and reduced tuning
+completeness. The default prior is therefore unchanged. This is a calibration
+checkpoint rather than evidence that suppressed stars do not exist; a larger
+population model may need suppression probability to depend on stellar or
+observational properties instead of using one global mixture weight.
 
 Use `build_regime_detection_study` to construct the same pattern with real
 AsteroScale samples or different regime definitions. It accepts one injection
