@@ -3,11 +3,16 @@
 from .components import GaussianEnvelope, HarveyComponent
 from .calibration import (
     CalibrationResult,
+    DetectionMetrics,
     InjectionCase,
+    ProbabilityBin,
     Recovery,
+    build_detection_study,
     build_injection_grid,
     evaluate_injections,
+    probability_reliability,
     summarize_recoveries,
+    threshold_curve,
 )
 from .asteroscale import AsteroScaleSamples
 from .data import PowerSpectrum
@@ -37,7 +42,9 @@ __all__ = [
     "GaussianEnvelope",
     "HarveyComponent",
     "CalibrationResult",
+    "DetectionMetrics",
     "InjectionCase",
+    "ProbabilityBin",
     "Recovery",
     "AsteroScaleSamples",
     "DetectionResult",
@@ -62,9 +69,12 @@ __all__ = [
     "simulate_periodogram",
     "lorentzian_mode_comb",
     "regular_frequency_grid",
+    "build_detection_study",
     "build_injection_grid",
     "evaluate_injections",
+    "probability_reliability",
     "summarize_recoveries",
+    "threshold_curve",
 ]
 
 __version__ = "0.1.0"

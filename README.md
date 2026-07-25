@@ -212,6 +212,49 @@ depending on loop order. Detector settings such as `dnu_scale` should be
 compared with separate detector runs over the same cases, because they change
 the inference rather than the injected population.
 
+`build_detection_study` is a convenience for completeness/false-positive
+experiments. It generates noise and granulation cases once per grid
+coordinate, plus oscillation cases at each requested amplitude. This avoids
+silently over-weighting the negative classes by repeating them along an
+amplitude axis that does not affect them:
+
+```python
+from asterodetect import build_detection_study
+
+cases = build_detection_study(
+    {
+        "white_noise": [0.1, 0.3, 1.0],
+        "duration_days": [27.4, 365.0],
+    },
+    factory,
+    oscillation_amplitudes=[0.1, 0.3, 1.0],
+    repeats=20,
+    seed=123,
+)
+calibration = evaluate_injections(detector, cases, seed=456)
+metrics = calibration.detection_metrics(threshold=0.5)
+print(metrics.completeness, metrics.false_positive_rate)
+```
+
+The returned binary metrics treat oscillation as the positive class and both
+noise and granulation as negative. They include completeness, false-positive
+rate, precision, binary Brier score, and a reliability table. Use
+`threshold_curve(calibration)` to inspect the trade-off between completeness
+and false positives rather than choosing a threshold from the same evaluation
+sample. Empty denominators (for example, completeness in a null-only subset)
+are reported as `NaN`, not as zero.
+
+A runnable demonstration is provided in `examples/calibration_study.py`:
+
+```bash
+uv run --extra test python examples/calibration_study.py \
+    --repeats 3 --draws 256 --output calibration-summary.json
+```
+
+This example is deliberately small. A scientific calibration needs many more
+independent realizations and should reserve a separate validation population
+for selecting the final probability threshold.
+
 ### Astrophysical injections
 
 `AstrophysicalInjectionFactory` supplies a standard simulation policy. It
