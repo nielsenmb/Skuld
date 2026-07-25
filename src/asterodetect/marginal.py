@@ -146,6 +146,36 @@ class PriorPredictiveMarginalizer:
             raise TypeError("spectrum must be a PowerSpectrum")
         if not isinstance(samples, AsteroScaleSamples):
             raise TypeError("samples must be AsteroScaleSamples")
+        likelihoods = self.log_likelihoods(
+            spectrum,
+            samples,
+            white_noise,
+            observation=observation,
+            granulation_variance_fraction_low=granulation_variance_fraction_low,
+            overdispersion=overdispersion,
+        )
+        evidences: dict[str, float] = {}
+        diagnostics: dict[str, MonteCarloDiagnostic] = {}
+        for label in self.labels:
+            evidences[label], diagnostics[label] = _log_evidence(likelihoods[label])
+        return self.from_evidences(evidences, diagnostics)
+
+    def log_likelihoods(
+        self,
+        spectrum: PowerSpectrum,
+        samples: AsteroScaleSamples,
+        white_noise: ArrayLike,
+        *,
+        observation: ObservationModel | None = None,
+        granulation_variance_fraction_low: ArrayLike | None = None,
+        overdispersion: ArrayLike | None = None,
+    ) -> Mapping[str, NDArray[np.float64]]:
+        """Evaluate every complete model for aligned stellar and nuisance rows."""
+
+        if not isinstance(spectrum, PowerSpectrum):
+            raise TypeError("spectrum must be a PowerSpectrum")
+        if not isinstance(samples, AsteroScaleSamples):
+            raise TypeError("samples must be AsteroScaleSamples")
         observation = observation or ObservationModel()
         white = np.asarray(white_noise, dtype=float)
         if white.ndim == 0:
@@ -195,13 +225,20 @@ class PriorPredictiveMarginalizer:
                     "overdispersion must be scalar or one value per sample, all >= 1"
                 )
             shape = spectrum.bins_averaged[None, :] / dispersion[:, None]
-        evidences: dict[str, float] = {}
-        diagnostics: dict[str, MonteCarloDiagnostic] = {}
+        likelihoods: dict[str, NDArray[np.float64]] = {}
         for label in self.labels:
-            likelihoods = _gamma_log_likelihood_batch(
+            likelihoods[label] = _gamma_log_likelihood_batch(
                 spectrum.power, expected[label], shape
             )
-            evidences[label], diagnostics[label] = _log_evidence(likelihoods)
+        return MappingProxyType(likelihoods)
+
+    def from_evidences(
+        self,
+        evidences: Mapping[str, float],
+        diagnostics: Mapping[str, MonteCarloDiagnostic],
+    ) -> MarginalEvaluation:
+        """Combine model evidences with the configured model probabilities."""
+
         joint = np.asarray(
             [evidences[label] + np.log(self.probabilities[label]) for label in self.labels]
         )

@@ -23,6 +23,7 @@ class SensitivityRun:
     truth: str
     draws: int
     dnu_scale: float
+    estimator: str
     repeat: int
     probabilities: Mapping[str, float]
     log_evidences: Mapping[str, float]
@@ -38,6 +39,7 @@ class SensitivitySummary:
 
     draws: int
     dnu_scale: float
+    estimator: str
     evaluations: int
     mean_oscillation_probability: float
     oscillation_probability_std: float
@@ -55,12 +57,12 @@ class SensitivityStudy:
     def summaries(self) -> tuple[SensitivitySummary, ...]:
         """Aggregate results by draw count and bin scale."""
 
-        groups: dict[tuple[int, float], list[SensitivityRun]] = {}
+        groups: dict[tuple[int, float, str], list[SensitivityRun]] = {}
         for run in self.runs:
-            groups.setdefault((run.draws, run.dnu_scale), []).append(run)
+            groups.setdefault((run.draws, run.dnu_scale, run.estimator), []).append(run)
 
         summaries = []
-        for (draws, dnu_scale), runs in sorted(groups.items()):
+        for (draws, dnu_scale, estimator), runs in sorted(groups.items()):
             probabilities_by_case: dict[str, list[float]] = {}
             for run in runs:
                 probabilities_by_case.setdefault(run.case_name, []).append(
@@ -99,6 +101,7 @@ class SensitivityStudy:
                 SensitivitySummary(
                     draws=draws,
                     dnu_scale=dnu_scale,
+                    estimator=estimator,
                     evaluations=len(runs),
                     mean_oscillation_probability=float(np.mean(probabilities)),
                     oscillation_probability_std=float(
@@ -130,6 +133,9 @@ def run_sensitivity_study(
     nuisance_prior: NuisancePrior | None = None,
     model_probabilities: Mapping[str, float] | None = None,
     minimum_envelope_bins: int = 5,
+    estimators: Sequence[str] = ("prior",),
+    pilot_draws: int = 256,
+    defensive_fraction: float = 0.2,
 ) -> SensitivityStudy:
     """Compare Monte Carlo convergence and fixed binning choices.
 
@@ -144,15 +150,22 @@ def run_sensitivity_study(
         raise ValueError("at least one injection case is required")
     draws_tuple = _positive_integer_sequence(draw_counts, "draw_counts")
     scales_tuple = _positive_float_sequence(dnu_scales, "dnu_scales")
+    estimators_tuple = tuple(estimators)
+    if not estimators_tuple or any(
+        estimator not in {"prior", "adaptive"} for estimator in estimators_tuple
+    ):
+        raise ValueError("estimators must contain 'prior' and/or 'adaptive'")
     if isinstance(repeats, bool) or not isinstance(repeats, (int, np.integer)):
         raise TypeError("repeats must be an integer")
     if repeats < 1:
         raise ValueError("repeats must be positive")
 
-    coordinates = tuple(product(draws_tuple, scales_tuple, range(repeats), case_tuple))
+    coordinates = tuple(
+        product(draws_tuple, scales_tuple, estimators_tuple, range(repeats), case_tuple)
+    )
     child_seeds = np.random.SeedSequence(seed).spawn(len(coordinates))
     runs = []
-    for (draws, dnu_scale, repeat, case), child_seed in zip(
+    for (draws, dnu_scale, estimator, repeat, case), child_seed in zip(
         coordinates, child_seeds, strict=True
     ):
         detector = Detector(
@@ -162,6 +175,9 @@ def run_sensitivity_study(
             model_probabilities=model_probabilities,
             dnu_scale=dnu_scale,
             minimum_envelope_bins=minimum_envelope_bins,
+            estimator=estimator,
+            pilot_draws=pilot_draws,
+            defensive_fraction=defensive_fraction,
         )
         result = detector.run(
             case.spectrum,
@@ -175,6 +191,7 @@ def run_sensitivity_study(
                 truth=case.truth,
                 draws=draws,
                 dnu_scale=dnu_scale,
+                estimator=estimator,
                 repeat=repeat,
                 probabilities=MappingProxyType(dict(result.probabilities)),
                 log_evidences=MappingProxyType(

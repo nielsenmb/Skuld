@@ -354,8 +354,36 @@ print(result.log_evidence, result.diagnostic.effective_sample_size)
 ```
 
 The callables use an `(n_draws, n_parameters)` unconstrained parameter
-matrix. This low-level interface lets the estimator be validated independently
-before it is made the end-to-end detector default.
+matrix. `Detector` can now use this estimator directly:
+
+```python
+detector = Detector(
+    estimator="adaptive",
+    draws=2048,
+    pilot_draws=256,
+    defensive_fraction=0.2,
+)
+result = detector.run(spectrum, asteroscale_samples, rng=42)
+```
+
+AsteroScale remains the stellar prior: complete sample rows are resampled
+without fitting a Gaussian to them, preserving correlations between
+`numax`, `dnu`, amplitudes, and timescales. The adaptive proposal targets
+only standardized nuisance coordinates, separately for each spectral model.
+The original estimator remains the default while calibration is ongoing.
+
+Paired comparisons can reuse each injected PSD across both estimators:
+
+```python
+study = run_sensitivity_study(
+    cases,
+    estimators=("prior", "adaptive"),
+    draw_counts=(128, 512, 2048),
+    dnu_scales=(0.5, 1.0, 2.0),
+    repeats=4,
+    seed=42,
+)
+```
 
 ## Development install
 

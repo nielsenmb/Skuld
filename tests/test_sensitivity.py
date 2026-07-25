@@ -81,3 +81,20 @@ def test_sensitivity_study_validates_axes(keyword, value, error):
     }
     with pytest.raises(error):
         run_sensitivity_study([_case()], **arguments)
+
+
+def test_sensitivity_study_compares_estimators_on_the_same_case():
+    study = run_sensitivity_study(
+        [_case()],
+        draw_counts=[16],
+        dnu_scales=[1.0],
+        estimators=["prior", "adaptive"],
+        pilot_draws=16,
+        repeats=1,
+        seed=3,
+    )
+    assert {run.estimator for run in study.runs} == {"prior", "adaptive"}
+    assert {summary.estimator for summary in study.summaries()} == {
+        "prior",
+        "adaptive",
+    }
