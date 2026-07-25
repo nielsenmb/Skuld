@@ -108,6 +108,84 @@ delta-method standard error for the log evidence. A model probability should
 not be treated as calibrated when its evidence is dominated by very few prior
 draws; more samples or a better proposal distribution are then required.
 
+## End-to-end detector
+
+`Detector` joins the individual stages without making the binned data depend
+on a sampled parameter:
+
+```python
+from asterodetect import Detector, ObservationModel
+
+detector = Detector(
+    draws=4096,
+    observation=ObservationModel(
+        integration_time_seconds=120.0,
+        dilution=0.92,
+    ),
+)
+result = detector.run(
+    unbinned_spectrum,
+    stellar_constraints={"Teff": (5772.0, 80.0), "parallax": (10.0, 0.1)},
+    rng=42,
+)
+
+print(result.classification)
+print(result.probabilities)
+print(result.evaluation.diagnostics)
+```
+
+The detector runs AsteroScale (or accepts an existing
+`AsteroScaleSamples` object), chooses and freezes the bin width, draws aligned
+nuisance parameters, and evaluates all three marginal likelihoods.
+`NuisancePrior` currently represents uncertainty in:
+
+- the white-noise floor;
+- oscillation-envelope amplitude;
+- combined granulation amplitude;
+- the variance split between the two Kallinger components;
+- the effective Gamma overdispersion.
+
+The automatic white-noise centre is the median of the highest-frequency 20%
+of the supplied PSD. This is a convenient initial estimate, not a generally
+valid background measurement. Supply `white_noise_centre` to `Detector.run`
+when that region contains appreciable stellar power or instrumental
+structure.
+
+## Injection recovery
+
+Calibration cases retain arbitrary metadata, making it possible to group
+results later by cadence, duration, magnitude, evolutionary state, dilution,
+or injected amplitude:
+
+```python
+from asterodetect import InjectionCase, evaluate_injections
+
+cases = [
+    InjectionCase(
+        name="solar-noise-001",
+        truth="noise",
+        spectrum=noise_spectrum,
+        stellar_constraints=asteroscale_samples,
+        metadata={"cadence_seconds": 120.0, "amplitude_scale": 0.0},
+    ),
+    InjectionCase(
+        name="solar-osc-001",
+        truth="oscillation",
+        spectrum=oscillation_spectrum,
+        stellar_constraints=asteroscale_samples,
+        metadata={"cadence_seconds": 120.0, "amplitude_scale": 1.0},
+    ),
+]
+calibration = evaluate_injections(detector, cases, seed=123)
+print(calibration.confusion_matrix)
+print(calibration.accuracy)
+print(calibration.multiclass_brier_score)
+```
+
+The injected parameters should deliberately differ from the inference-prior
+centre. Otherwise the exercise tests numerical self-consistency rather than
+detection calibration.
+
 ## Development install
 
 ```bash

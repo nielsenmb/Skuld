@@ -12,7 +12,11 @@ from scipy.special import erf, gammaln, logsumexp
 
 from .asteroscale import AsteroScaleSamples
 from .data import PowerSpectrum
-from .observation import ObservationModel, cadence_amplitude_response
+from .observation import (
+    ObservationModel,
+    cadence_amplitude_response,
+    granulation_component_amplitudes,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +48,9 @@ def _log_evidence(log_likelihoods: NDArray[np.float64]) -> tuple[float, MonteCar
 
 
 def _gamma_log_likelihood_batch(power, expected, shape):
-    shape = np.asarray(shape, dtype=float)[None, :]
+    shape = np.asarray(shape, dtype=float)
+    if shape.ndim == 1:
+        shape = shape[None, :]
     power = np.asarray(power, dtype=float)[None, :]
     return np.sum(
         shape * np.log(shape)
@@ -131,6 +137,8 @@ class PriorPredictiveMarginalizer:
         white_noise: ArrayLike,
         *,
         observation: ObservationModel | None = None,
+        granulation_variance_fraction_low: ArrayLike | None = None,
+        overdispersion: ArrayLike | None = None,
     ) -> MarginalEvaluation:
         """Return marginal model probabilities and Monte Carlo diagnostics."""
 
@@ -146,6 +154,15 @@ class PriorPredictiveMarginalizer:
             raise ValueError("white_noise must be positive and scalar or one value per sample")
 
         granulation = samples.granulation_parameters(observation)
+        if granulation_variance_fraction_low is not None:
+            low, high = granulation_component_amplitudes(
+                samples.values["A_gran"],
+                variance_fraction_low=granulation_variance_fraction_low,
+                bolometric_correction=observation.bolometric_correction,
+                dilution=observation.dilution,
+            )
+            granulation = dict(granulation)
+            granulation["amplitudes"] = np.column_stack((low, high))
         granulation_mean = _granulation_means(
             spectrum,
             granulation["amplitudes"],
@@ -161,7 +178,23 @@ class PriorPredictiveMarginalizer:
             "granulation": noise_mean + granulation_mean,
             "oscillation": noise_mean + granulation_mean + envelope_mean,
         }
-        shape = spectrum.bins_averaged / self.overdispersion
+        dispersion = self.overdispersion if overdispersion is None else np.asarray(
+            overdispersion, dtype=float
+        )
+        if np.ndim(dispersion) == 0:
+            if not np.isfinite(dispersion) or dispersion < 1:
+                raise ValueError("overdispersion must be finite and at least one")
+            shape = spectrum.bins_averaged / dispersion
+        else:
+            if (
+                dispersion.shape != (len(samples),)
+                or not np.all(np.isfinite(dispersion))
+                or np.any(dispersion < 1)
+            ):
+                raise ValueError(
+                    "overdispersion must be scalar or one value per sample, all >= 1"
+                )
+            shape = spectrum.bins_averaged[None, :] / dispersion[:, None]
         evidences: dict[str, float] = {}
         diagnostics: dict[str, MonteCarloDiagnostic] = {}
         for label in self.labels:
