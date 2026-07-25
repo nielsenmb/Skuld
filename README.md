@@ -386,9 +386,65 @@ cases = build_injection_grid(
 The factory builds a regular Fourier grid, two normalized Kallinger
 super-Lorentzians, and approximate `l=0,1,2,3` ridges beneath a Gaussian
 power envelope. It applies dilution and the frequency-dependent integration
-response before drawing an exponential periodogram realization. Regular
-sampling is intentional in this first version; gaps and spectral windows
-belong in a later model-misspecification experiment.
+response before drawing an exponential periodogram realization.
+
+### Gaps and observing windows
+
+For model-misspecification tests, the factory can instead realize the
+stochastic spectrum as a light curve, multiply it by an observing mask, and
+transform it back to a PSD:
+
+```python
+continuous = factory(
+    "continuous",
+    {"truth": "oscillation", "window_profile": "continuous"},
+    np.random.default_rng(12),
+)
+gapped = factory(
+    "gapped",
+    {"truth": "oscillation", "window_profile": "tess-like"},
+    np.random.default_rng(12),
+)
+```
+
+Using the same random seed makes this a paired comparison: both cases begin
+with the same Fourier realization and differ only in the observing window.
+The built-in TESS-like approximation combines longer periodic downlink gaps,
+shorter interruptions, and a small fraction of randomly missing cadences.
+Its parameters are configurable through `tess_like_observing_window`; it is
+not intended to reproduce the quality flags of a particular observed target.
+
+The detector deliberately continues to use its independent-Gamma likelihood
+for these spectra. The experiment therefore measures robustness to unmodelled
+leakage and inter-bin correlations; the likelihood has not silently been
+taught the same window used for injection.
+
+Run the leakage-safe paired checkpoint with:
+
+```bash
+uv run python examples/window_campaign.py \
+  --profile checkpoint \
+  --repeats 2 \
+  --draws 256 \
+  --output window-campaign.json
+```
+
+The threshold is selected from uninterrupted tuning cases under the requested
+false-positive constraint, then frozen before either uninterrupted or gapped
+validation cases are summarized. The JSON report includes true-positive and
+false-positive rates, paired oscillation-probability shifts, detections gained
+or lost, mean duty cycles, and breakdowns by amplitude, stellar regime, and
+observing duration.
+
+In the initial 480-spectrum standard campaign, the TESS-like window retained
+95.3% of cadences. At the threshold selected from uninterrupted tuning cases,
+held-out true-positive rate fell from 48.6% for continuous observations to
+38.9% for gapped observations, while both false-positive rates were 4.2%.
+Full-amplitude recovery fell from 95.8% to 79.2%. Across 120 matched validation
+pairs, 13 detections were lost and 6 were gained. These remain calibration
+checkpoint statistics, with two validation realizations per exact grid cell,
+but they show that high duty cycle alone does not make spectral-window effects
+negligible.
 
 Tutorial notebooks are in `notebooks/`. Install their dependencies with
 `uv sync --extra tutorial`, then start with
