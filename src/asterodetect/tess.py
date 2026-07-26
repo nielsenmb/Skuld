@@ -84,6 +84,39 @@ class TessValidationTarget:
     Published seismic values are retained only for validation after detection.
     They are deliberately forbidden from ``stellar_constraints`` to prevent
     the answer leaking into the AsteroScale prior.
+
+    Attributes
+    ----------
+    name
+        Human-readable target name.
+    tic_id
+        TESS Input Catalog identifier.
+    reference_label
+        Literature status: ``"confirmed_detection"``,
+        ``"reported_non_detection"``, or ``"challenge"``.
+    regime
+        Stellar-regime label used when grouping validation results.
+    reference
+        Citation or catalogue identifier supporting the reference label.
+    stellar_constraints
+        Independent measurements passed to AsteroScale. Seismic quantities
+        such as ``numax`` and ``dnu`` are rejected.
+    reference_numax, reference_numax_error
+        Optional published frequency of maximum oscillation power and its
+        uncertainty, in microhertz. These are validation labels only.
+    reference_dnu, reference_dnu_error
+        Optional published large separation and its uncertainty, in
+        microhertz. These are validation labels only.
+    preferred_cadence_seconds
+        Preferred TESS exposure time, or ``None`` to select the shortest
+        available product.
+    sectors
+        Optional TESS sectors to include. An empty tuple accepts all sectors.
+    data_author
+        Requested light-curve producer, or ``"auto"`` for the first
+        available producer in the validation script's priority order.
+    notes
+        Free-text information about extraction or target selection.
     """
 
     name: str
@@ -152,7 +185,26 @@ class TessValidationTarget:
 def load_tess_target_manifest(
     path: str | Path,
 ) -> tuple[TessValidationTarget, ...]:
-    """Load and validate a CSV target manifest."""
+    """Load and validate a CSV target manifest.
+
+    Parameters
+    ----------
+    path
+        Manifest containing the fields accepted by
+        :class:`TessValidationTarget`. Sector numbers are separated by
+        semicolons and ``stellar_constraints`` is encoded as JSON.
+
+    Returns
+    -------
+    tuple of TessValidationTarget
+        Targets in manifest order.
+
+    Raises
+    ------
+    ValueError
+        If the manifest is empty, repeats a TIC identifier, or contains
+        invalid target metadata.
+    """
 
     targets: list[TessValidationTarget] = []
     with Path(path).open(newline="", encoding="utf-8") as stream:
@@ -225,7 +277,23 @@ def _collapse_long_gaps(
 
 @dataclass(frozen=True, slots=True)
 class PreparedTessLightCurve:
-    """A detrended TESS light curve placed on a regular zero-filled grid."""
+    """A detrended TESS light curve placed on a regular zero-filled grid.
+
+    Attributes
+    ----------
+    flux_ppm
+        Mean-subtracted flux in parts per million. Missing cadences are zero.
+    observed
+        Boolean mask distinguishing observed samples from zero-filled gaps.
+    cadence_seconds
+        Regular sampling interval in seconds.
+    start_time_days
+        Time coordinate of the first scheduled cadence.
+    source
+        Description of the input light-curve products.
+    dilution
+        Fraction of aperture flux attributed to the target, in ``(0, 1]``.
+    """
 
     flux_ppm: NDArray[np.float64]
     observed: NDArray[np.bool_]
@@ -286,6 +354,35 @@ class PreparedTessLightCurve:
         Gaps longer than ``long_gap_days`` are shortened to one cadence, matching
         the treatment used for re-observations separated by years in Hatt et al.
         (2023).
+
+        Parameters
+        ----------
+        time_days
+            Irregular observation times in days.
+        flux
+            Detrended relative or ppm flux values.
+        quality
+            Optional quality flags; only zero-valued cadences are retained.
+        cadence_seconds
+            Known regular cadence. If omitted, it is inferred from the
+            shortest common time differences.
+        flux_unit
+            ``"relative"`` for flux near unity or ``"ppm"`` for ppm values.
+        sigma_clip
+            Symmetric robust clipping threshold in scaled median absolute
+            deviations, or ``None`` to disable clipping.
+        long_gap_days
+            Gaps longer than this are shortened to one cadence, or ``None`` to
+            preserve every scheduled cadence.
+        source
+            Description stored with the prepared product.
+        dilution
+            Fraction of aperture flux attributed to the target.
+
+        Returns
+        -------
+        PreparedTessLightCurve
+            Immutable regular light curve and exact observing mask.
         """
 
         time = np.asarray(time_days, dtype=float)
@@ -403,7 +500,13 @@ class PreparedTessLightCurve:
         return PowerSpectrum(frequency[1:] * 1.0e6, power[1:])
 
     def save(self, path: str | Path) -> None:
-        """Save a compact, reusable preparation product."""
+        """Save a compact, reusable preparation product.
+
+        Parameters
+        ----------
+        path
+            Destination ``.npz`` file.
+        """
 
         np.savez_compressed(
             Path(path),
@@ -417,7 +520,18 @@ class PreparedTessLightCurve:
 
     @classmethod
     def load(cls, path: str | Path) -> PreparedTessLightCurve:
-        """Load a product written by :meth:`save`."""
+        """Load a product written by :meth:`save`.
+
+        Parameters
+        ----------
+        path
+            Existing ``.npz`` preparation product.
+
+        Returns
+        -------
+        PreparedTessLightCurve
+            Validated light curve reconstructed from disk.
+        """
 
         with np.load(Path(path), allow_pickle=False) as data:
             return cls(
@@ -436,7 +550,29 @@ class PreparedTessLightCurve:
 
 @dataclass(frozen=True, slots=True)
 class TessValidationRecovery:
-    """Detector output paired with one literature-labelled TESS target."""
+    """Detector output paired with one literature-labelled TESS target.
+
+    Attributes
+    ----------
+    target
+        Target metadata and literature labels.
+    probabilities
+        Posterior probability for each complete spectral model.
+    classification
+        Maximum-posterior model label.
+    detected
+        Whether the oscillation probability meets the chosen threshold.
+    bin_width
+        Detector bin width in microhertz.
+    duty_cycle
+        Fraction of scheduled cadences present in the prepared light curve.
+    duration_days
+        Scheduled baseline after collapsing very long gaps.
+    gap_count
+        Number of contiguous missing-data intervals.
+    maximum_gap_hours
+        Duration of the longest retained gap.
+    """
 
     target: TessValidationTarget
     probabilities: Mapping[str, float]
@@ -460,7 +596,34 @@ def evaluate_tess_target(
     window_row_batch_size: int = 8,
     **asteroscale_kwargs: Any,
 ) -> TessValidationRecovery:
-    """Evaluate one prepared target with its exact observing window."""
+    """Evaluate one prepared target with its exact observing window.
+
+    Parameters
+    ----------
+    target
+        Target metadata containing independent AsteroScale constraints.
+    light_curve
+        Prepared regular light curve and observing mask.
+    detector
+        Configured detector. Its observation model should contain the
+        target's cadence and dilution.
+    threshold
+        Oscillation-probability threshold used for the binary detection flag.
+    rng
+        Random generator or seed passed to the detector.
+    window_fft_workers
+        Worker count used by the spectral-window FFTs.
+    window_row_batch_size
+        Number of full-resolution model rows transformed together.
+    **asteroscale_kwargs
+        Additional keywords passed through to :meth:`Detector.run` and then
+        to AsteroScale inference.
+
+    Returns
+    -------
+    TessValidationRecovery
+        Detection probabilities, binary decision, and window diagnostics.
+    """
 
     threshold = float(threshold)
     if not np.isfinite(threshold) or not 0 <= threshold <= 1:
@@ -496,7 +659,25 @@ def evaluate_tess_target(
 def summarize_tess_recoveries(
     recoveries: Sequence[TessValidationRecovery],
 ) -> dict[str, Any]:
-    """Return JSON-safe real-data metrics without inventing negative truth."""
+    """Return JSON-safe real-data metrics without inventing negative truth.
+
+    Parameters
+    ----------
+    recoveries
+        Completed real-target evaluations.
+
+    Returns
+    -------
+    dict
+        Confirmed-detection TPR, reported-non-detection flag rate, and
+        confirmed-detection TPR grouped by stellar regime.
+
+    Notes
+    -----
+    The reported-non-detection flag rate is deliberately not labelled as a
+    false-positive rate because absence of a published detection is not known
+    negative truth.
+    """
 
     items = tuple(recoveries)
     if not items:
@@ -555,7 +736,18 @@ def summarize_tess_recoveries(
 
 
 def recovery_to_dict(recovery: TessValidationRecovery) -> dict[str, Any]:
-    """Convert one recovery to a JSON-safe record."""
+    """Convert one recovery to a JSON-safe record.
+
+    Parameters
+    ----------
+    recovery
+        Completed target evaluation.
+
+    Returns
+    -------
+    dict
+        Target labels, probabilities, decision, and window diagnostics.
+    """
 
     return {
         "name": recovery.target.name,
