@@ -1,7 +1,14 @@
 import numpy as np
 import pytest
 
-from asterodetect import AsteroScaleSamples, Detector, NuisancePrior, PowerSpectrum
+from asterodetect import (
+    AsteroScaleSamples,
+    Detector,
+    NuisancePrior,
+    PowerSpectrum,
+    continuous_observing_window,
+    regular_frequency_grid,
+)
 from asterodetect.asteroscale import ASTERO_SCALE_PARAMETERS
 
 
@@ -30,6 +37,21 @@ def test_detector_runs_complete_fixed_binning_path_reproducibly():
     assert len(first.samples) == 24
     assert first.classification in ("noise", "granulation", "oscillation")
     assert first.probabilities == second.probabilities
+
+
+def test_detector_can_apply_target_observing_window():
+    window = continuous_observing_window(2.0, 600.0)
+    frequency = regular_frequency_grid(2.0, 600.0)
+    spectrum = PowerSpectrum(frequency, np.full_like(frequency, 0.1))
+    result = Detector(draws=8).run(
+        spectrum,
+        _samples(),
+        rng=4,
+        observing_window=window,
+        window_row_batch_size=4,
+    )
+    assert result.spectral_window_applied
+    assert np.isclose(sum(result.probabilities.values()), 1.0)
 
 
 def test_nuisance_draws_are_valid_and_scatter_can_be_disabled():

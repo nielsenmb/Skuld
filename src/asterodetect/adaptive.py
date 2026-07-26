@@ -21,6 +21,7 @@ from .marginal import (
 )
 from .nuisance import NuisancePrior
 from .observation import ObservationModel
+from .window import SpectralWindowOperator
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +117,7 @@ class AdaptiveNuisanceMarginalizer:
         *,
         white_noise_centre: float,
         observation: ObservationModel | None = None,
+        spectral_window: SpectralWindowOperator | None = None,
         rng: np.random.Generator | int | None = None,
     ) -> AdaptiveMarginalEvaluation:
         """Estimate all three evidences using separate defensive proposals.
@@ -132,6 +134,8 @@ class AdaptiveNuisanceMarginalizer:
             Positive centre of the white-noise prior.
         observation
             Cadence, dilution, visibility, and bolometric response model.
+        spectral_window
+            Optional target-specific spectral-window forward operator.
         rng
             Random generator or seed.
 
@@ -200,6 +204,8 @@ class AdaptiveNuisanceMarginalizer:
                         "granulation_variance_fraction_low"
                     ],
                     overdispersion=nuisance["overdispersion"],
+                    spectral_window=spectral_window,
+                    model_labels=(label,),
                 )[label]
                 grouped = likelihood.reshape(size, repeats)
                 # Average likelihood, not log likelihood, over the empirical

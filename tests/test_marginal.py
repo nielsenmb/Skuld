@@ -74,6 +74,23 @@ def test_white_noise_draws_are_marginalized_and_report_low_ess_when_needed():
     assert np.isclose(sum(result.responsibilities.values()), 1.0)
 
 
+def test_log_likelihoods_can_evaluate_one_model():
+    likelihoods = PriorPredictiveMarginalizer().log_likelihoods(
+        _spectrum(_models()[0], 4),
+        _samples(8),
+        0.05,
+        model_labels=("noise",),
+    )
+    assert tuple(likelihoods) == ("noise",)
+    with pytest.raises(ValueError):
+        PriorPredictiveMarginalizer().log_likelihoods(
+            _spectrum(_models()[0], 4),
+            _samples(8),
+            0.05,
+            model_labels=("unknown",),
+        )
+
+
 def test_marginal_evaluation_can_reweight_a_model_subset():
     evaluation = PriorPredictiveMarginalizer().from_evidences(
         {"noise": 0.0, "granulation": 1.0, "oscillation": 2.0},

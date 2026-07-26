@@ -1,0 +1,26 @@
+{
+  "draws": 256,
+  "repeats": 8,
+  "seed": 2321,
+  "threshold": 0.45,
+  "profiles": {
+    "continuous-current": {
+      "cases": 32,
+      "detections": 31,
+      "true_positive_rate": 0.96875,
+      "mean_oscillation_probability": 0.9157632084858346
+    },
+    "gapped-current": {
+      "cases": 32,
+      "detections": 23,
+      "true_positive_rate": 0.71875,
+      "mean_oscillation_probability": 0.6753810083567174
+    },
+    "gapped-window-aware": {
+      "cases": 32,
+      "detections": 31,
+      "true_positive_rate": 0.96875,
+      "mean_oscillation_probability": 0.9024016853518166
+    }
+  }
+}

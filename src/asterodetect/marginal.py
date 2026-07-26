@@ -17,6 +17,7 @@ from .observation import (
     cadence_amplitude_response,
     granulation_component_amplitudes,
 )
+from .window import SpectralWindowOperator
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +209,75 @@ def _envelope_means(spectrum: PowerSpectrum, parameters) -> NDArray[np.float64]:
     return parameters["integrated_power"][:, None] * probability / widths
 
 
+def _windowed_component_means(
+    spectrum: PowerSpectrum,
+    operator: SpectralWindowOperator,
+    *,
+    white_noise: NDArray[np.float64],
+    granulation_amplitudes: NDArray[np.float64],
+    granulation_frequencies: NDArray[np.float64],
+    envelope_parameters: Mapping[str, NDArray[np.float64]],
+    integration_time_seconds: float | None,
+    include_granulation: bool = True,
+    include_envelope: bool = True,
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]:
+    """Return window-convolved noise, granulation, and envelope bin means."""
+
+    frequency = operator.frequency
+    response_squared = (
+        cadence_amplitude_response(frequency, integration_time_seconds) ** 2
+        if integration_time_seconds is not None
+        else np.ones_like(frequency)
+    )
+    noise_template = operator.convolve_and_bin(
+        np.ones_like(frequency),
+        spectrum,
+    )
+    noise_mean = white_noise[:, None] * noise_template[None, :]
+    granulation_mean = np.zeros((white_noise.size, spectrum.power.size))
+    envelope_mean = np.zeros_like(granulation_mean)
+    normalization = 2.0 * np.sqrt(2.0) / np.pi
+    for start in range(0, white_noise.size, operator.row_batch_size):
+        stop = min(start + operator.row_batch_size, white_noise.size)
+        if include_granulation:
+            amplitudes = granulation_amplitudes[start:stop]
+            characteristic = granulation_frequencies[start:stop]
+            ratio = frequency[None, None, :] / characteristic[:, :, None]
+            height = normalization * amplitudes**2 / characteristic
+            granulation_power = np.sum(
+                height[:, :, None] / (1.0 + ratio**4),
+                axis=1,
+            )
+            granulation_power *= response_squared[None, :]
+            granulation_mean[start:stop] = operator.convolve_and_bin(
+                granulation_power,
+                spectrum,
+            )
+
+        if include_envelope:
+            integrated_power = envelope_parameters["integrated_power"][
+                start:stop, None
+            ]
+            numax = envelope_parameters["numax"][start:stop, None]
+            sigma = envelope_parameters["sigma"][start:stop, None]
+            envelope_power = (
+                integrated_power
+                / (np.sqrt(2.0 * np.pi) * sigma)
+                * np.exp(
+                    -0.5 * ((frequency[None, :] - numax) / sigma) ** 2
+                )
+            )
+            envelope_mean[start:stop] = operator.convolve_and_bin(
+                envelope_power,
+                spectrum,
+            )
+    return noise_mean, granulation_mean, envelope_mean
+
+
 class PriorPredictiveMarginalizer:
     """Integrate N, G, and O whole-spectrum models over joint prior draws.
 
@@ -253,6 +323,7 @@ class PriorPredictiveMarginalizer:
         observation: ObservationModel | None = None,
         granulation_variance_fraction_low: ArrayLike | None = None,
         overdispersion: ArrayLike | None = None,
+        spectral_window: SpectralWindowOperator | None = None,
     ) -> MarginalEvaluation:
         """Return marginal model probabilities and Monte Carlo diagnostics.
 
@@ -270,6 +341,9 @@ class PriorPredictiveMarginalizer:
             Optional low-frequency Harvey variance fraction per sample.
         overdispersion
             Optional scalar or sample-aligned overdispersion.
+        spectral_window
+            Optional target-specific operator applied to every complete
+            spectral model before likelihood evaluation.
 
         Returns
         -------
@@ -288,6 +362,7 @@ class PriorPredictiveMarginalizer:
             observation=observation,
             granulation_variance_fraction_low=granulation_variance_fraction_low,
             overdispersion=overdispersion,
+            spectral_window=spectral_window,
         )
         evidences: dict[str, float] = {}
         diagnostics: dict[str, MonteCarloDiagnostic] = {}
@@ -304,6 +379,8 @@ class PriorPredictiveMarginalizer:
         observation: ObservationModel | None = None,
         granulation_variance_fraction_low: ArrayLike | None = None,
         overdispersion: ArrayLike | None = None,
+        spectral_window: SpectralWindowOperator | None = None,
+        model_labels: tuple[str, ...] | None = None,
     ) -> Mapping[str, NDArray[np.float64]]:
         """Evaluate every complete model for aligned stellar and nuisance rows.
 
@@ -321,6 +398,11 @@ class PriorPredictiveMarginalizer:
             Optional low-frequency Harvey variance fraction per sample.
         overdispersion
             Optional scalar or sample-aligned overdispersion.
+        spectral_window
+            Optional target-specific operator applied to every complete
+            spectral model before likelihood evaluation.
+        model_labels
+            Optional subset of complete models to evaluate.
 
         Returns
         -------
@@ -332,6 +414,21 @@ class PriorPredictiveMarginalizer:
             raise TypeError("spectrum must be a PowerSpectrum")
         if not isinstance(samples, AsteroScaleSamples):
             raise TypeError("samples must be AsteroScaleSamples")
+        requested_labels = (
+            self.labels if model_labels is None else tuple(model_labels)
+        )
+        if (
+            not requested_labels
+            or len(set(requested_labels)) != len(requested_labels)
+            or not set(requested_labels).issubset(self.labels)
+        ):
+            raise ValueError(
+                f"model_labels must be a non-empty subset of {self.labels}"
+            )
+        include_granulation = bool(
+            {"granulation", "oscillation"} & set(requested_labels)
+        )
+        include_envelope = "oscillation" in requested_labels
         observation = observation or ObservationModel()
         white = np.asarray(white_noise, dtype=float)
         if white.ndim == 0:
@@ -349,16 +446,38 @@ class PriorPredictiveMarginalizer:
             )
             granulation = dict(granulation)
             granulation["amplitudes"] = np.column_stack((low, high))
-        granulation_mean = _granulation_means(
-            spectrum,
-            granulation["amplitudes"],
-            granulation["frequencies"],
-            observation.integration_time_seconds,
-        )
-        envelope_mean = _envelope_means(
-            spectrum, samples.envelope_parameters(observation)
-        )
-        noise_mean = np.broadcast_to(white[:, None], granulation_mean.shape)
+        envelope_parameters = samples.envelope_parameters(observation)
+        if spectral_window is None:
+            granulation_mean = _granulation_means(
+                spectrum,
+                granulation["amplitudes"],
+                granulation["frequencies"],
+                observation.integration_time_seconds,
+            )
+            envelope_mean = _envelope_means(
+                spectrum, envelope_parameters
+            )
+            noise_mean = np.broadcast_to(
+                white[:, None], granulation_mean.shape
+            )
+        else:
+            if not isinstance(spectral_window, SpectralWindowOperator):
+                raise TypeError(
+                    "spectral_window must be a SpectralWindowOperator"
+                )
+            noise_mean, granulation_mean, envelope_mean = (
+                _windowed_component_means(
+                    spectrum,
+                    spectral_window,
+                    white_noise=white,
+                    granulation_amplitudes=granulation["amplitudes"],
+                    granulation_frequencies=granulation["frequencies"],
+                    envelope_parameters=envelope_parameters,
+                    integration_time_seconds=observation.integration_time_seconds,
+                    include_granulation=include_granulation,
+                    include_envelope=include_envelope,
+                )
+            )
         expected = {
             "noise": noise_mean,
             "granulation": noise_mean + granulation_mean,
@@ -382,7 +501,7 @@ class PriorPredictiveMarginalizer:
                 )
             shape = spectrum.bins_averaged[None, :] / dispersion[:, None]
         likelihoods: dict[str, NDArray[np.float64]] = {}
-        for label in self.labels:
+        for label in requested_labels:
             likelihoods[label] = _gamma_log_likelihood_batch(
                 spectrum.power, expected[label], shape
             )

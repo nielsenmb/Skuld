@@ -797,6 +797,7 @@ class AstrophysicalInjectionFactory:
             "dnu": medians["dnu"],
             "fwhm_envelope": medians["FWHM_env"],
             "window_profile": window_profile,
+            "window_seed": int(parameters.get("window_seed", 0)),
             "duty_cycle": duty_cycle,
             "gap_count": gap_count,
             "maximum_gap_hours": maximum_gap_hours,
