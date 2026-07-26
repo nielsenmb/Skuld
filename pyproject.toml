@@ -20,6 +20,10 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=7", "pytest-cov>=4"]
 tutorial = ["jupyter>=1", "matplotlib>=3.7"]
+tess-validation = [
+    "astroquery>=0.4.7",
+    "lightkurve>=2.5",
+]
 
 [dependency-groups]
 dev = [

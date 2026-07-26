@@ -66,6 +66,16 @@ from .sensitivity import (
     run_sensitivity_study,
 )
 from .window import SpectralWindowOperator
+from .tess import (
+    REFERENCE_LABELS,
+    PreparedTessLightCurve,
+    TessValidationRecovery,
+    TessValidationTarget,
+    evaluate_tess_target,
+    load_tess_target_manifest,
+    recovery_to_dict,
+    summarize_tess_recoveries,
+)
 
 __all__ = [
     "GaussianEnvelope",
@@ -130,6 +140,14 @@ __all__ = [
     "AdaptiveImportanceSampler",
     "ImportanceDiagnostic",
     "ImportanceResult",
+    "REFERENCE_LABELS",
+    "PreparedTessLightCurve",
+    "TessValidationRecovery",
+    "TessValidationTarget",
+    "evaluate_tess_target",
+    "load_tess_target_manifest",
+    "recovery_to_dict",
+    "summarize_tess_recoveries",
 ]
 
 __version__ = "0.1.0"

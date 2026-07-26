@@ -653,6 +653,69 @@ uv run python examples/window_aware_study.py \
   --output window-aware-rgb-replay.json
 ```
 
+### Real TESS validation factory
+
+`examples/tess_validation.py` separates network-dependent preparation from
+the expensive detector run. The shipped `examples/tess_targets.csv` is a
+24-target smoke sample:
+
+- 12 confirmed main-sequence/subgiant detections selected across the
+  frequency range of the
+  [TESS Luminaries catalogue](https://cdsarc.cds.unistra.fr/viz-bin/cat/J/A%2BA/701/A285);
+- 12 confirmed RGB detections spanning brightness and frequency from
+  [HD-TESS](https://cdsarc.cds.unistra.fr/viz-bin/cat/J/AJ/164/135).
+
+Published `numax` and `dnu` values are reference answers only. The manifest
+loader forbids them, and other seismic quantities, from entering the
+AsteroScale constraints. During preparation the script queries independent
+TIC effective-temperature and radius estimates, downloads the preferred
+available light curves, normalizes each product, removes cadences rejected by
+the quality mask and a 5-sigma clip, and caches:
+
+- `tic-<id>.npz`: zero-filled ppm light curve, exact observing mask, cadence,
+  and aperture dilution from `CROWDSAP`;
+- `tic-<id>.constraints.json`: independent AsteroScale inputs.
+
+Install the downloader dependencies and prepare either the whole smoke sample
+or a small first batch:
+
+```bash
+uv sync --extra tess-validation
+
+uv run python examples/tess_validation.py --limit 2 prepare
+```
+
+Preparation expects systematics-corrected products; it does not apply a
+generic high-pass filter because a filter safe for dwarfs can remove a red
+giant's oscillation envelope. Gaps longer than 50 days are shortened to one
+cadence, following Hatt et al. (2023), while ordinary sector, downlink, and
+momentum-dump gaps remain in the target-specific spectral window.
+The smoke manifest starts with standard SPOC products. Lund et al. (2025)
+needed custom apertures for some bright stars, so an individual miss should be
+checked against the published/custom extraction before it is attributed to
+the detector. A locally extracted light curve can replace the cached NPZ
+without changing the run or summary stages.
+
+Run locally with the frozen adaptive estimator and 0.45 threshold:
+
+```bash
+uv run python examples/tess_validation.py --limit 2 run \
+  --draws 256 --fft-workers -1 --window-row-batch-size 8
+
+uv run python examples/tess_validation.py --limit 2 summarize \
+  --output tess-summary.json
+```
+
+Each successful target is written atomically to its own JSON file. Re-running
+the command skips completed targets, so a long campaign can resume after an
+interruption. Use `--tic TIC_ID` to isolate one target or `--overwrite` to
+repeat completed work.
+
+Only confirmed literature detections contribute to the reported real-data
+TPR. A future list of reported non-detections is kept as a separate challenge
+set: its flagged fraction is not called an FPR because lack of a published
+detection does not prove that oscillations are absent.
+
 Tutorial notebooks are in `notebooks/`. Install their dependencies with
 `uv sync --extra tutorial`, then start with
 `01_models_and_binning.ipynb` and continue to

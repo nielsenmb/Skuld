@@ -1,0 +1,25 @@
+name,tic_id,reference_label,regime,reference,reference_numax,reference_numax_error,reference_dnu,reference_dnu_error,preferred_cadence_seconds,sectors,data_author,stellar_constraints,notes
+nu Ind,317019578,confirmed_detection,subgiant,Lund+2025,343.7,4.2,25.6,0.4,120,,SPOC,{},Low-frequency Luminary
+eta Boo,367758676,confirmed_detection,subgiant,Lund+2025,697.9,17.8,39.2,0.9,120,,SPOC,{},Low-frequency Luminary
+HD 112164,248127641,confirmed_detection,subgiant,Lund+2025,897.2,23.6,50.6,0.9,120,,SPOC,{},Low-frequency Luminary
+sigma Cet,66604391,confirmed_detection,subgiant,Lund+2025,913.8,40.1,50.9,0.9,120,,SPOC,{},Intermediate-frequency Luminary
+68 Eri,248411315,confirmed_detection,subgiant,Lund+2025,1222.5,28.5,65.9,1.7,120,,SPOC,{},Intermediate-frequency Luminary
+HD 3823,281667171,confirmed_detection,subgiant,Lund+2025,1593.8,44.7,82.6,0.6,120,,SPOC,{},Intermediate-frequency Luminary
+HD 21722,31799975,confirmed_detection,main_sequence,Lund+2025,1618.1,175.1,78.6,2.0,120,,SPOC,{},High-frequency Luminary
+HD 49933,281812116,confirmed_detection,main_sequence,Lund+2025,1997.7,117.8,92.5,1.5,120,,SPOC,{},High-frequency Luminary
+HD 10307,327507922,confirmed_detection,main_sequence,Lund+2025,2490.1,96.0,115.3,1.2,120,,SPOC,{},High-frequency Luminary
+HD 52711,91686663,confirmed_detection,main_sequence,Lund+2025,2583.3,99.1,122.3,0.9,120,,SPOC,{},Very-high-frequency Luminary
+26 Dra,219777482,confirmed_detection,main_sequence,Lund+2025,3059.0,176.8,132.9,0.9,120,,SPOC,{},Very-high-frequency Luminary
+sigma Dra,259237827,confirmed_detection,main_sequence,Lund+2025,4217.9,122.6,182.2,0.5,20,,SPOC,{},Above the 120-second Nyquist frequency
+HD 25728,38396606,confirmed_detection,red_giant,Hon+2022,6.99,0.16,1.18,0.02,120,,SPOC,"{""Teff"": [4243.0, 85.0]}",Low-numax RGB
+HD 238961,376975266,confirmed_detection,red_giant,Hon+2022,15.15,0.70,1.87,0.02,120,,SPOC,"{""Teff"": [4537.0, 96.0]}",Low-numax RGB
+HD 270788,294925772,confirmed_detection,red_giant,Hon+2022,29.15,0.47,3.61,0.03,120,,SPOC,"{""Teff"": [4559.0, 91.0]}",Low-numax RGB
+HD 163588,232621005,confirmed_detection,red_giant,Hon+2022,37.23,0.56,4.07,0.02,120,,SPOC,"{""Teff"": [4488.0, 90.0]}",Intermediate-numax RGB
+HD 47409,255701774,confirmed_detection,red_giant,Hon+2022,41.10,0.83,4.79,0.02,120,,SPOC,"{""Teff"": [4891.0, 98.0]}",Intermediate-numax RGB
+HD 271456,404927377,confirmed_detection,red_giant,Hon+2022,41.28,0.76,4.95,0.04,120,,SPOC,"{""Teff"": [4813.0, 139.0]}",Intermediate-numax RGB
+HD 154633,459978312,confirmed_detection,red_giant,Hon+2022,102.70,1.14,7.90,0.03,120,,SPOC,"{""Teff"": [4886.0, 120.0]}",High-numax RGB
+HD 26856,38516267,confirmed_detection,red_giant,Hon+2022,84.14,0.32,7.89,0.04,120,,SPOC,"{""Teff"": [4558.0, 91.0]}",High-numax RGB
+HD 271641,141531305,confirmed_detection,red_giant,Hon+2022,99.07,1.16,9.07,0.03,120,,SPOC,"{""Teff"": [4846.0, 130.0]}",High-numax RGB
+HD 27442,198079199,confirmed_detection,red_giant,Hon+2022,313.97,15.70,21.19,0.07,120,,SPOC,"{""Teff"": [4772.0, 121.0]}",Base-RGB target
+HD 28002,38679437,confirmed_detection,red_giant,Hon+2022,215.42,9.65,17.24,0.14,120,,SPOC,"{""Teff"": [5095.0, 102.0]}",Base-RGB target
+HD 270669,358156337,confirmed_detection,red_giant,Hon+2022,209.05,1.77,15.75,0.08,120,,SPOC,"{""Teff"": [4822.0, 96.0]}",Base-RGB target
