@@ -116,7 +116,23 @@ class SpectralWindowOperator:
         row_batch_size: int = 32,
         fft_workers: int = 1,
     ) -> "SpectralWindowOperator":
-        """Construct an operator from an observing-window-like object."""
+        """Construct an operator from an observing-window-like object.
+
+        Parameters
+        ----------
+        window
+            Object providing a boolean ``observed`` array and positive
+            ``cadence_seconds``.
+        row_batch_size
+            Maximum number of expected spectra transformed together.
+        fft_workers
+            Non-zero worker count passed to SciPy's FFT implementation.
+
+        Returns
+        -------
+        SpectralWindowOperator
+            Validated operator for the supplied time mask.
+        """
 
         try:
             observed = window.observed

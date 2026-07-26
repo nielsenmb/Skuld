@@ -441,10 +441,12 @@ time or coherent gap structure.
 gap, and strongest non-zero spectral-window sidelobe. These are properties of
 the mask, not detector performance metrics.
 
-The detector deliberately continues to use its independent-Gamma likelihood
-for these spectra. The experiment therefore measures robustness to unmodelled
-leakage and inter-bin correlations; the likelihood has not silently been
-taught the same window used for injection.
+When no observing mask is passed to `Detector.run`, the detector continues to
+use pristine model spectra with its independent-Gamma likelihood. The
+campaigns in this section deliberately use that default path, so they measure
+robustness to unmodelled leakage and inter-bin correlations. The later
+target-specific window-aware path corrects the expected mean spectrum while
+retaining the same Gamma approximation.
 
 ### Comparing model sets
 
@@ -717,10 +719,9 @@ set: its flagged fraction is not called an FPR because lack of a published
 detection does not prove that oscillations are absent.
 
 Tutorial notebooks are in `notebooks/`. Install their dependencies with
-`uv sync --extra tutorial`, then start with
-`01_models_and_binning.ipynb` and continue to
-`02_injection_recovery.ipynb`, then
-`03_evidence_and_binning_sensitivity.ipynb`.
+`uv sync --extra tutorial` and follow the five-notebook sequence listed in
+the Tutorials section above. The final two notebooks connect the component
+and convergence tutorials to calibrated model probabilities and TPR.
 
 ## Adaptive importance sampling
 
