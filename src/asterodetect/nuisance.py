@@ -7,10 +7,13 @@ from types import MappingProxyType
 from typing import Mapping
 
 import numpy as np
+from baldr import Beta, Normal
 from numpy.typing import NDArray
-from scipy.stats import beta, norm
 
 from .data import PowerSpectrum
+
+
+_STANDARD_NORMAL = Normal(backend="numpy")
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,7 +219,7 @@ class NuisancePrior:
             if fraction == 0:
                 return lognormal(z, self.envelope_log_scatter)
             probability = np.clip(
-                norm.cdf(z),
+                _STANDARD_NORMAL.cdf(z),
                 np.finfo(float).eps,
                 1 - np.finfo(float).eps,
             )
@@ -233,7 +236,7 @@ class NuisancePrior:
                 np.finfo(float).eps,
                 1 - np.finfo(float).eps,
             )
-            component_latent = norm.ppf(component_probability)
+            component_latent = _STANDARD_NORMAL.ppf(component_probability)
             result = lognormal(component_latent, self.envelope_log_scatter)
             result[suppressed] = (
                 self.envelope_suppression_factor
@@ -246,7 +249,7 @@ class NuisancePrior:
 
         alpha = 0.5 * self.granulation_split_concentration
         probability = np.clip(
-            norm.cdf(values[:, 3]),
+            _STANDARD_NORMAL.cdf(values[:, 3]),
             np.finfo(float).eps,
             1 - np.finfo(float).eps,
         )
@@ -258,9 +261,9 @@ class NuisancePrior:
                 "granulation_scale": lognormal(
                     values[:, 2], self.granulation_log_scatter
                 ),
-                "granulation_variance_fraction_low": beta.ppf(
-                    probability, alpha, alpha
-                ),
+                "granulation_variance_fraction_low": Beta(
+                    alpha, alpha, backend="numpy"
+                ).ppf(probability),
                 "overdispersion": np.exp(
                     self.overdispersion_log_scatter * np.abs(values[:, 4])
                 ),
