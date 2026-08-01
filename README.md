@@ -15,8 +15,9 @@ numerical kernels, an AsteroScale sample adapter, and unit tests.
 The validated public API remains NumPy based. Performance-sensitive kernels
 in `asterodetect.jax_backend` are pure, traceable functions that can be used
 with `jax.jit`, `jax.vmap`, and automatic differentiation when worthwhile.
-AsteroScale is installed from a pinned Git commit so that changes on its main
-branch cannot silently alter Skuld's inference behaviour.
+AsteroScale, Baldr, and Mimir are installed from pinned Git commits so that
+changes on their main branches cannot silently alter Skuld's inference,
+probability transforms, or spectral estimates.
 
 The detection spectrum is intended to be heavily and irreversibly binned
 before inference. `AsteroScaleSamples.bin_spectrum` chooses a fixed width of
@@ -671,8 +672,8 @@ Published `numax` and `dnu` values are reference answers only. The manifest
 loader forbids them, and other seismic quantities, from entering the
 AsteroScale constraints. During preparation the script queries independent
 TIC effective-temperature and radius estimates, downloads the preferred
-available light curves, normalizes each product, removes cadences rejected by
-the quality mask and a 5-sigma clip, and caches:
+available light curves through Mimir, converts each product to ppm, removes
+cadences rejected by the quality mask and a 5-sigma clip, and caches:
 
 - `tic-<id>.npz`: zero-filled ppm light curve, exact observing mask, cadence,
   and aperture dilution from `CROWDSAP`;
@@ -692,6 +693,9 @@ generic high-pass filter because a filter safe for dwarfs can remove a red
 giant's oscillation envelope. Gaps longer than 50 days are shortened to one
 cadence, following Hatt et al. (2023), while ordinary sector, downlink, and
 momentum-dump gaps remain in the target-specific spectral window.
+The run stage passes only the observed cadences to Mimir's `nifty-ls`
+power-density estimator. The cached zero-filled grid is used only to retain
+the exact observing mask for Skuld's window-aware forward model.
 The smoke manifest starts with standard SPOC products. Lund et al. (2025)
 needed custom apertures for some bright stars, so an individual miss should be
 checked against the published/custom extraction before it is attributed to

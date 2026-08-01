@@ -15,6 +15,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from mimir import (
+    download_lightcurves,
+    lightcurve_to_timeseries,
+    search_lightcurves,
+)
 
 from asterodetect import (
     Detector,
@@ -108,13 +113,7 @@ def _tic_constraints(tic_id: int) -> dict[str, Any]:
 def _search_and_download(target: TessValidationTarget, download_dir: Path):
     """Download the preferred available TESS light-curve products."""
 
-    try:
-        import lightkurve as lk
-    except ImportError as error:
-        raise RuntimeError(
-            "prepare requires the 'tess-validation' optional dependencies"
-        ) from error
-    search = lk.search_lightcurve(f"TIC {target.tic_id}", mission="TESS")
+    search = search_lightcurves(f"TIC {target.tic_id}", mission="TESS")
     if target.data_author and target.data_author.lower() != "auto":
         authors = np.asarray(search.table["author"]).astype(str)
         search = search[authors == target.data_author]
@@ -157,12 +156,7 @@ def _search_and_download(target: TessValidationTarget, download_dir: Path):
             min(available),
         )
         search = search[authors == selected_author]
-    collection = search.download_all(
-        download_dir=download_dir,
-        quality_bitmask="default",
-    )
-    if collection is None or len(collection) == 0:
-        raise RuntimeError(f"download returned no products for TIC {target.tic_id}")
+    collection = download_lightcurves(search, download_dir=download_dir)
     return collection, float(selected_exposure)
 
 
@@ -183,25 +177,22 @@ def prepare_target(
     collection, cadence = _search_and_download(target, download_dir)
     times = []
     fluxes = []
-    qualities = []
     sources = []
     dilution_values = []
     dilution_weights = []
     for light_curve in collection:
-        time = np.asarray(light_curve.time.value, dtype=float)
-        flux = np.asarray(light_curve.flux.value, dtype=float)
-        finite = np.isfinite(flux)
-        if np.count_nonzero(finite) < 4:
-            continue
-        median = float(np.nanmedian(flux[finite]))
-        flux = flux / median
         quality = np.asarray(
-            getattr(light_curve, "quality", np.zeros(time.size)),
+            getattr(light_curve, "quality", np.zeros(len(light_curve))),
             dtype=int,
         )
-        times.append(time)
-        fluxes.append(flux)
-        qualities.append(quality)
+        series = lightcurve_to_timeseries(
+            light_curve[quality == 0],
+            ppm=True,
+        )
+        if series.n_samples < 4:
+            continue
+        times.append(series.time)
+        fluxes.append(series.flux)
         sources.append(
             f"{light_curve.meta.get('AUTHOR', 'unknown')}:"
             f"sector-{light_curve.meta.get('SECTOR', 'unknown')}"
@@ -213,15 +204,14 @@ def prepare_target(
             and 0 < float(crowding) <= 1
         ):
             dilution_values.append(float(crowding))
-            dilution_weights.append(int(np.count_nonzero(finite)))
+            dilution_weights.append(series.n_samples)
     if not times:
         raise RuntimeError(f"all products were empty for TIC {target.tic_id}")
     prepared = PreparedTessLightCurve.from_irregular(
         np.concatenate(times),
         np.concatenate(fluxes),
-        quality=np.concatenate(qualities),
         cadence_seconds=cadence,
-        flux_unit="relative",
+        flux_unit="ppm",
         sigma_clip=5.0,
         long_gap_days=50.0,
         source=";".join(sources),

@@ -84,8 +84,37 @@ def test_irregular_light_curve_preserves_gaps_and_physical_psd_normalization():
     assert np.isclose(
         np.sum(spectrum.power) * spacing,
         observed_variance,
-        rtol=2e-3,
+        rtol=1e-12,
     )
+
+
+def test_prepared_light_curve_uses_observed_cadences_for_mimir_spectrum(
+    monkeypatch,
+):
+    calls = {}
+
+    class Result:
+        frequency = np.asarray([1.0, 2.0])
+        power_density = np.asarray([3.0, 4.0])
+
+    def fake_power_spectrum(**kwargs):
+        calls.update(kwargs)
+        return Result()
+
+    monkeypatch.setattr("asterodetect.tess.power_spectrum", fake_power_spectrum)
+    prepared = PreparedTessLightCurve(
+        [2.0, 0.0, -2.0, 1.0, -1.0],
+        np.asarray([True, False, True, True, True]),
+        120.0,
+        42.0,
+    )
+    spectrum = prepared.to_power_spectrum()
+    np.testing.assert_array_equal(calls["time"], [0.0, 240.0, 360.0, 480.0])
+    np.testing.assert_array_equal(calls["flux"], [2.0, -2.0, 1.0, -1.0])
+    assert calls["time_unit"] == "s"
+    assert calls["flux_unit"] == "ppm"
+    np.testing.assert_array_equal(spectrum.frequency, Result.frequency)
+    np.testing.assert_array_equal(spectrum.power, Result.power_density)
 
 
 def test_long_intercycle_gap_is_collapsed_without_filling_short_gaps():

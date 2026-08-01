@@ -11,6 +11,7 @@ from types import MappingProxyType
 from typing import Any
 
 import numpy as np
+from mimir import power_spectrum
 from numpy.typing import ArrayLike, NDArray
 
 from .data import PowerSpectrum
@@ -481,23 +482,23 @@ class PreparedTessLightCurve:
         return self.flux_ppm.size * self.cadence_seconds / 86400.0
 
     def to_power_spectrum(self) -> PowerSpectrum:
-        """Return a one-sided ppm²/µHz FFT power-density spectrum."""
+        """Return Mimir's one-sided ppm²/µHz power-density spectrum.
 
-        transform = np.fft.rfft(self.flux_ppm)
-        frequency = np.fft.rfftfreq(
-            self.flux_ppm.size,
-            self.cadence_seconds,
+        Only retained cadences are passed to Mimir. The zero-filled regular
+        array remains an internal representation of the observing mask and is
+        not interpreted as a set of measured zero-flux samples.
+        """
+
+        indices = np.flatnonzero(self.observed)
+        spectrum = power_spectrum(
+            time=indices * self.cadence_seconds,
+            flux=self.flux_ppm[self.observed],
+            time_unit="s",
+            flux_unit="ppm",
+            frequency_unit="uHz",
+            oversampling=1,
         )
-        scale = (
-            2.0
-            * self.cadence_seconds
-            / (self.flux_ppm.size * np.mean(self.observed))
-            * 1.0e-6
-        )
-        power = scale * np.abs(transform) ** 2
-        if self.flux_ppm.size % 2 == 0:
-            power[-1] *= 0.5
-        return PowerSpectrum(frequency[1:] * 1.0e6, power[1:])
+        return PowerSpectrum(spectrum.frequency, spectrum.power_density)
 
     def save(self, path: str | Path) -> None:
         """Save a compact, reusable preparation product.

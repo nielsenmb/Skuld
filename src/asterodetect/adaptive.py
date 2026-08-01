@@ -7,9 +7,9 @@ from types import MappingProxyType
 from typing import Mapping, cast
 
 import numpy as np
+from baldr import Normal
 from numpy.typing import NDArray
 from scipy.special import logsumexp
-from scipy.stats import norm
 
 from .asteroscale import AsteroScaleSamples
 from .data import PowerSpectrum
@@ -22,6 +22,9 @@ from .marginal import (
 from .nuisance import NuisancePrior
 from .observation import ObservationModel
 from .window import SpectralWindowOperator
+
+
+_STANDARD_NORMAL = Normal(backend="numpy")
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,7 +173,7 @@ class AdaptiveNuisanceMarginalizer:
             def prior_logpdf(values: NDArray[np.float64]) -> NDArray[np.float64]:
                 """Evaluate the independent standard-Normal latent prior."""
 
-                return np.sum(norm.logpdf(values), axis=1)
+                return np.sum(_STANDARD_NORMAL.logpdf(values), axis=1)
 
             def log_likelihood(values: NDArray[np.float64]) -> NDArray[np.float64]:
                 """Evaluate one spectral model for latent nuisance rows."""
