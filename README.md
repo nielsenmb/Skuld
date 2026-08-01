@@ -484,7 +484,9 @@ The notebooks follow the detector in implementation order:
 4. `04_from_spectrum_to_probability.ipynb` — comparing a measured spectrum
    with the three complete models and converting evidences into probabilities;
 5. `05_true_positive_rate.ipynb` — tuning/validation splits, thresholds,
-   true-positive rates, observing windows, and the model-removal diagnostic.
+   true-positive rates, observing windows, and the model-removal diagnostic;
+6. `06_shared_mimir_baldr.ipynb` — following a Mimir time series through
+   Skuld's exact observing-mask adapter and shared nifty-ls PSD.
 
 Install the plotting dependencies with `uv sync --extra tutorial`. The last
 notebook reads the saved standard-campaign summary in `notebooks/data` so it
@@ -723,7 +725,7 @@ set: its flagged fraction is not called an FPR because lack of a published
 detection does not prove that oscillations are absent.
 
 Tutorial notebooks are in `notebooks/`. Install their dependencies with
-`uv sync --extra tutorial` and follow the five-notebook sequence listed in
+`uv sync --extra tutorial` and follow the six-notebook sequence listed in
 the Tutorials section above. The final two notebooks connect the component
 and convergence tutorials to calibrated model probabilities and TPR.
 
