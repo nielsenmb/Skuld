@@ -12,7 +12,7 @@ license = {text = "MIT"}
 authors = [{name = "Martin B. Nielsen"}]
 dependencies = [
     "AsteroScale @ git+https://github.com/nielsenmb/AsteroScale.git@c348e95dad2769e534176050ddf7b644495b2d59",
-    "baldr[numpy] @ git+https://github.com/nielsenmb/Baldr.git@9968f079e781b63cd779eba18a8a8343ee9086b3",
+    "baldr[numpy] @ git+https://github.com/nielsenmb/Baldr.git@de90e72db0fd0932e12ba92fb67d72c332c2da82",
     "jax>=0.4.28,<0.7",
     "mimir-astro @ git+https://github.com/nielsenmb/Mimir.git@c19b26a023f8f66f583b47ef547e7bd1b32f3a26",
     "numpy>=1.26",
