@@ -7,8 +7,9 @@ from types import MappingProxyType
 from typing import Mapping
 
 import numpy as np
+from baldr.numpy import Gamma
 from numpy.typing import ArrayLike, NDArray
-from scipy.special import erf, gammaln, logsumexp
+from scipy.special import erf, logsumexp
 
 from .asteroscale import AsteroScaleSamples
 from .data import PowerSpectrum
@@ -139,14 +140,7 @@ def _gamma_log_likelihood_batch(power, expected, shape):
     if shape.ndim == 1:
         shape = shape[None, :]
     power = np.asarray(power, dtype=float)[None, :]
-    return np.sum(
-        shape * np.log(shape)
-        - gammaln(shape)
-        + (shape - 1.0) * np.log(power)
-        - shape * np.log(expected)
-        - shape * power / expected,
-        axis=1,
-    )
+    return np.sum(Gamma(a=shape).logpdf_mean(power, expected), axis=1)
 
 
 def _granulation_means(
